@@ -1,0 +1,4 @@
+..\..\H2BR1\H2BR1_rtc.c:28:12:RTC_Init	5
+..\..\H2BR1\H2BR1_rtc.c:77:12:RTC_CalendarConfig	5
+..\..\H2BR1\H2BR1_rtc.c:131:12:BOS_CalendarConfig	6
+..\..\H2BR1\H2BR1_rtc.c:187:6:GetTimeDate	1
