@@ -25,6 +25,7 @@
 #include "H2BR1_dma.h"
 #include "H2BR1_inputs.h"
 #include "H2BR1_eeprom.h"
+#include "H2BR1_i2c.h"
 /* Exported definitions -------------------------------------------------------*/
 
 #define	modulePN		_H2BR1

@@ -8,7 +8,7 @@
 
  */
 /* Includes ------------------------------------------------------------------*/
-#include "H2BR1_i2c.h"
+#include "BOS.h"
 
 /* USER CODE BEGIN 0 */
 
