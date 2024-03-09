@@ -34,9 +34,6 @@ extern Module_Status MAX30100_Write(uint8_t regAddr, uint8_t txData, uint32_t ti
 extern Module_Status MAX30100_Read(uint8_t regAddr, uint8_t *pRxData, uint8_t size, uint32_t timeout);
 
 
-MAX30100_s max30100;
-/* Exported functions */
-
 /* Module exported parameters ------------------------------------------------*/
 module_param_t modParam[NUM_MODULE_PARAMS] ={{.paramPtr = NULL, .paramFormat =FMT_FLOAT, .paramName =""}};
 
@@ -47,7 +44,20 @@ module_param_t modParam[NUM_MODULE_PARAMS] ={{.paramPtr = NULL, .paramFormat =FM
 
 
 /* Private function prototypes -----------------------------------------------*/
+/**********************Generic Functions****************************/
+void MAX30100_Reset(MAX30100_s *MaxStruct);
+void MAX30100_Enable_Interrupt(MAX30100_s *MaxStruct, INTERRUPT_EN_A_FULL_BIT aFull, INTERRUPT_EN_TEMP_RDY_BIT tempRdy, INTERRUPT_EN_HR_RDY_BIT hrRdy, INTERRUPT_EN_SPO2_RDY_BIT Spo2Rdy);
+void MAX30100_Set_Mode(MAX30100_s *MaxStruct, MAX30100_MODE mode);
+void MAX30100_Set_SpO2_SampleRate(MAX30100_s *MaxStruct, MAX30100_SpO2_SR sampleRate );
+void MAX30100_Set_Led_PulseWidth(MAX30100_s *MaxStruct, MAX30100_LED_PW pulseWidth );
+void MAX30100_Set_Led_Current(MAX30100_s *MaxStruct, MAX30100_LED_Current redPa, MAX30100_LED_Current irPa );
+void MAX30100_Read_FIFO(MAX30100_s *MaxStruct);
+void MAX30100_Clear_FIFO(void);
 
+void Oxymeter_Modify_Led_Current_Bias(MAX30100_s *MaxStruct);
+void Oxymeter_Add_Samples_To_Buffers(MAX30100_s *MaxStruct);
+void Oxymeter_Detect_Finger(MAX30100_s *MaxStruct);
+void Oxymeter_Signal_Processing(MAX30100_s *MaxStruct);
 
 /* Create CLI commands --------------------------------------------------------*/
 
