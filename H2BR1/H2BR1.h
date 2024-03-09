@@ -47,7 +47,7 @@
 #define _Usart1 1
 #define _Usart2 1
 #define _Usart3 1
-#define _Usart4 0
+#define _Usart4 1
 #define _Usart5 1
 #define _Usart6	1
 
@@ -58,7 +58,7 @@
 #define P3uart &huart3
 #define P4uart &huart1
 #define P5uart &huart5
-#define P6uart &huart6
+#define P6uart &huart4
 
 
 /* Port Definitions */
@@ -102,8 +102,8 @@
 /* Module-specific Definitions */
 
 /* Indicator LED */
-#define _IND_LED_PORT			GPIOB
-#define _IND_LED_PIN			GPIO_PIN_7
+#define _IND_LED_PORT			GPIOA
+#define _IND_LED_PIN			GPIO_PIN_5
 
 #define NUM_MODULE_PARAMS		1
 

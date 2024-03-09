@@ -103,7 +103,7 @@ void MX_USART4_UART_Init(void){
 	huart4.Init.OneBitSampling = UART_ONEBIT_SAMPLING_DISABLED;
 	huart4.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
 	HAL_UART_Init(&huart4);
-#if _P1pol_reversed
+#if _P6pol_reversed
 	huart4.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_SWAP_INIT;
 	huart4.AdvancedInit.Swap = UART_ADVFEATURE_SWAP_ENABLE;
 	HAL_UART_Init(&huart4);
