@@ -28,7 +28,7 @@ UART_HandleTypeDef huart6;
 /* Exported variables */
 extern FLASH_ProcessTypeDef pFlash;
 extern uint8_t numOfRecordedSnippets;
-
+MAX30100_s max30100;
 /* Exported functions */
 
 /* Module exported parameters ------------------------------------------------*/
