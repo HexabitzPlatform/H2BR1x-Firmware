@@ -98,6 +98,30 @@ void HAL_I2C_MspDeInit(I2C_HandleTypeDef* i2cHandle)
 
 /* USER CODE BEGIN 1 */
 
+
+/**********************MAX30100 Interface Functions****************************/
+Module_Status MAX30100_Write(uint8_t regAddr, uint8_t txData, uint32_t timeout)
+{
+	Module_Status Status = HAL_OK;
+	uint8_t data[2] = {0};
+	data[0] = regAddr;
+	data[1] = txData;
+	uint8_t size = 2;
+	HAL_I2C_Master_Transmit(&HANDLER_I2C_MAX30100, MAX30100_I2C_ADDRESS , data, size, timeout);
+	return Status;
+}
+
+
+Module_Status MAX30100_Read(uint8_t regAddr, uint8_t *pRxData, uint8_t size, uint32_t timeout)
+{
+	Module_Status Status = HAL_OK;
+	HAL_I2C_Master_Transmit(&HANDLER_I2C_MAX30100, MAX30100_I2C_ADDRESS, &regAddr, 1, timeout);
+	HAL_I2C_Master_Receive(&HANDLER_I2C_MAX30100, MAX30100_I2C_ADDRESS,  pRxData, size, timeout);
+	return Status;
+}
+
+
+
 /* USER CODE END 1 */
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

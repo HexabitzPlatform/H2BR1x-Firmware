@@ -28,6 +28,12 @@ UART_HandleTypeDef huart6;
 /* Exported variables */
 extern FLASH_ProcessTypeDef pFlash;
 extern uint8_t numOfRecordedSnippets;
+
+/* Exported functions */
+extern Module_Status MAX30100_Write(uint8_t regAddr, uint8_t txData, uint32_t timeout);
+extern Module_Status MAX30100_Read(uint8_t regAddr, uint8_t *pRxData, uint8_t size, uint32_t timeout);
+
+
 MAX30100_s max30100;
 /* Exported functions */
 
