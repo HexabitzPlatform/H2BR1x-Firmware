@@ -115,6 +115,16 @@
 #define LODN_EXG_Pin            GPIO_PIN_0
 #define LODN_EXG_GPIO_Port      GPIOB
 
+/* Module Special I2C */
+
+
+#define MCU_SCL_Pin             GPIO_PIN_3
+#define MCU_SCL_GPIO_Port       GPIOB
+#define MCU_SDA_Pin             GPIO_PIN_4
+#define MCU_SDA_GPIO_Port       GPIOB
+
+
+
 /* H2BR1 Module Special Timer */
 
 
