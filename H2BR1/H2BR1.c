@@ -445,7 +445,306 @@ void RegisterModuleCLICommands(void){
 /* -----------------------------------------------------------------------
  |							 	Local  APIs			    		          | 																 	|
 /* -----------------------------------------------------------------------
- */
+ * */
+
+void MAX30100_Reset(MAX30100_s *MaxStruct)
+{
+	uint8_t modeConfReg = 0;
+	modeConfReg = modeConfReg & MAX30100_MODE_CONF_RESET_MASK;
+	MAX30100_Write(MAX30100_MODE_CONF_ADDR, modeConfReg, 100);
+	// delay until completing reset process
+	HAL_Delay(1);
+	MaxStruct->modeConfReg=modeConfReg;
+}
+
+
+void MAX30100_Enable_Interrupt(MAX30100_s *MaxStruct, INTERRUPT_EN_A_FULL_BIT aFull, INTERRUPT_EN_TEMP_RDY_BIT tempRdy, INTERRUPT_EN_HR_RDY_BIT hrRdy, INTERRUPT_EN_SPO2_RDY_BIT Spo2Rdy)
+{
+	uint8_t interrEnReg = aFull | tempRdy | hrRdy | Spo2Rdy;
+	MAX30100_Write(MAX30100_INTERRUPT_EN_ADDR , interrEnReg, 100);
+	MaxStruct->interruptEnableReg = interrEnReg;
+}
+
+
+void MAX30100_Set_Mode(MAX30100_s *MaxStruct, MAX30100_MODE mode)
+{
+	MaxStruct->mode = mode;
+	uint8_t modeConfReg = 0;
+	MAX30100_Read(MAX30100_MODE_CONF_ADDR, &modeConfReg, 1, 100);
+    modeConfReg = (modeConfReg & ~MAX30100_MODE_CONF_MODE_MASK) | (mode << MAX30100_MODE_CONF_MODE_POSITION);
+    if(mode == SPO2_MODE)
+		//Enable Temp_En bit
+		modeConfReg |= MAX30100_MODE_CONF_TEMP_EN_MASK;
+    else
+    	//Disable Temp_En bit
+    	{modeConfReg &= ~MAX30100_MODE_CONF_TEMP_EN_MASK;}
+	MAX30100_Write(MAX30100_MODE_CONF_ADDR, modeConfReg, 100);
+	MaxStruct->modeConfReg = modeConfReg;
+	if(mode == UNUSED_MODE)
+		// disable all interrupt bits
+	MAX30100_Enable_Interrupt(MaxStruct,INTERRUPT_EN_AFULL_DISABLED, INTERRUPT_EN_TEMP_RDY_DISABLED, INTERRUPT_EN_HR_RDY_DISABLED, INTERRUPT_EN_SPO2_RDY_DISABLED);
+	else
+		// enable A_Full interrupt bit
+	MAX30100_Enable_Interrupt(MaxStruct,INTERRUPT_EN_AFULL_ENABLED, INTERRUPT_EN_TEMP_RDY_DISABLED, INTERRUPT_EN_HR_RDY_DISABLED, INTERRUPT_EN_SPO2_RDY_DISABLED);
+}
+
+
+void MAX30100_Set_SpO2_SampleRate(MAX30100_s *MaxStruct, MAX30100_SpO2_SR sampleRate )
+{
+	MaxStruct->SPO2SampleRate= sampleRate;
+	uint8_t SPO2ConfReg = 0;
+	MAX30100_Read(MAX30100_SPO2_CONF_ADDR, &SPO2ConfReg, 1, 100);
+	SPO2ConfReg = (SPO2ConfReg & ~MAX30100_SPO2_CONF_SR_MASK) | (sampleRate << MAX30100_SPO2_CONF_SR_POSITION);
+	MAX30100_Write(MAX30100_SPO2_CONF_ADDR , SPO2ConfReg, 100);
+	MaxStruct->SPO2ConfReg = SPO2ConfReg;
+}
+
+
+void MAX30100_Set_Led_PulseWidth(MAX30100_s *MaxStruct, MAX30100_LED_PW pulseWidth )
+{
+	MaxStruct->ledPulseWidth = pulseWidth;
+	uint8_t SPO2ConfReg = 0;
+	MAX30100_Read(MAX30100_SPO2_CONF_ADDR, &SPO2ConfReg, 1, 100);
+	SPO2ConfReg = (SPO2ConfReg & ~MAX30100_SPO2_CONF_LED_PW_MASK) | ((pulseWidth << MAX30100_SPO2_CONF_LED_PW_POSITION) & MAX30100_SPO2_CONF_LED_PW_MASK);
+	MAX30100_Write(MAX30100_SPO2_CONF_ADDR , SPO2ConfReg, 100);
+	MaxStruct->SPO2ConfReg = SPO2ConfReg;
+}
+
+void MAX30100_Set_Led_Current(MAX30100_s *MaxStruct, MAX30100_LED_Current redPa, MAX30100_LED_Current irPa )
+{
+	MaxStruct->redPa = redPa;
+	uint8_t ledConfReg = 0;
+	ledConfReg= (redPa << MAX30100_LED_CONF_RED_PA_POSITION) | (irPa << MAX30100_LED_CONF_IR_PA_POSITION);
+	MAX30100_Write(MAX30100_LED_CONF_ADDR, ledConfReg, 100);
+	MaxStruct->ledConfReg= ledConfReg;
+}
+
+
+void MAX30100_Read_FIFO(MAX30100_s *MaxStruct)
+{
+	uint8_t fifoData[MAX30100_FIFO_DATA_SIZE] = {0};
+	// timeout =1000msec; reading 16 samples needs from 15-300msec
+	MAX30100_Read(MAX30100D_FIFO_DATA_ADDR, fifoData, MAX30100_FIFO_DATA_SIZE, 1000);
+	uint8_t i=0, j=0;
+	for (i = 0; i < MAX30100_FIFO_SAMPLES_SIZE; i++)
+	{
+		// First read byte is MSB. Size of sample is 2 bytes
+		MaxStruct->irSamples[i]  = (fifoData[j] << 8) | fifoData[j+1];
+		MaxStruct->redSamples[i]= (fifoData[j+2] << 8) | fifoData[j+3];
+		j+=4;
+	}
+ }
+
+void MAX30100_Clear_FIFO(void)
+{
+	MAX30100_Write(MAX30100_FIFO_W_PTR_ADDR, 0x00, 100);
+	MAX30100_Write(MAX30100_OVF_COUNTER_ADDR, 0x00, 100);
+	MAX30100_Write(MAX30100_FIFO_R_PTR_ADDR, 0x00, 100);
+}
+
+
+
+void Oxymeter_Add_Samples_To_Buffers(MAX30100_s *MaxStruct)
+{
+	uint16_t buffIndex = MaxStruct->bufferIndex; // last value of bufferIndex
+	if (buffIndex >= OXYMETER_MAX_BUFFER_SIZE)
+		buffIndex = 0;
+	for(uint8_t i = 0; i< MAX30100_FIFO_SAMPLES_SIZE; i++)
+	{
+		if (buffIndex < OXYMETER_MAX_BUFFER_SIZE)
+		{
+			MaxStruct->irRawBuffer[buffIndex] = MaxStruct->irSamples[i];
+			MaxStruct->redRawBuffer [buffIndex] = MaxStruct->redSamples[i];
+			buffIndex++;
+		}
+	}
+	MaxStruct->bufferIndex = buffIndex;
+}
+
+void Oxymeter_Modify_Led_Current_Bias(MAX30100_s *MaxStruct)
+{
+	if(MaxStruct->mode == SPO2_MODE)
+	{
+		uint8_t redLedCurrentIndex = (uint8_t) (MaxStruct->redPa);
+		uint32_t tLastModified = MaxStruct->timeLastBiasModified;
+		uint8_t needModifying = 0;
+		if (HAL_GetTick() - tLastModified > CURRENT_MODIFYING_DURATION_MS)
+		{
+			if (MaxStruct->irSamples[0] - MaxStruct->redSamples[0] >  CURRENT_MODIFYING_THRESHOLD  && redLedCurrentIndex < MAX30100_LED_CURRENT_50P0)
+			{
+				++redLedCurrentIndex;
+				needModifying = 1;
+			}
+
+			else if (MaxStruct->redSamples[0] - MaxStruct->irSamples[0] >  CURRENT_MODIFYING_THRESHOLD  && redLedCurrentIndex > MAX30100_LED_CURRENT_0P0)
+			{
+				--redLedCurrentIndex;
+				needModifying = 1;
+			}
+			else MaxStruct->currentBiasState = CURRENT_BIAS_STATE_OK;
+
+			if (needModifying == 1)
+			{
+				MaxStruct->currentBiasState = CURRENT_BIAS_STATE_NOT_OK;
+				MAX30100_Set_Led_Current(MaxStruct,  redLedCurrentIndex, MAX30100_LED_CURRENT_50P0);
+				MaxStruct->timeLastBiasModified = HAL_GetTick();
+			}
+		}
+	}
+}
+
+
+void Oxymeter_Detect_Finger(MAX30100_s *MaxStruct)
+{
+	MaxStruct->fingerState = FINGER_STATE_NOT_DETECTED;
+	for (uint8_t i=0; i<MAX30100_FIFO_SAMPLES_SIZE; i++)
+		{
+			if (MaxStruct->irSamples[i] > FINGER_DETECTING_THRESHOLD)
+				MaxStruct->fingerState = FINGER_STATE_DETECTED;
+			else
+			{
+				MaxStruct->fingerState = FINGER_STATE_NOT_DETECTED;
+				MaxStruct->bufferIndex = 0;
+				MaxStruct->heartRate = 0;
+				MaxStruct->SPO2 =0;
+				break;
+			}
+		}
+}
+
+void Oxymeter_Signal_Processing(MAX30100_s *MaxStruct)
+{
+	MaxStruct-> processStartTick = HAL_GetTick();
+	float ts= 0.009407; // should be 0.01 but period of sample from IC not accurate (0.009407); fs=100
+	/************Removing DC (HPF)*************/
+	float irRemovedDC [OXYMETER_MAX_BUFFER_SIZE]={0};
+	float redRemovedDC [OXYMETER_MAX_BUFFER_SIZE]={0};
+	// HPF: 1st order, Fc=0.8Hz
+	uint16_t previousInput=0;
+	uint16_t currentInput=0;
+	// HPF: 1st order, Fc=0.8Hz, fs=100
+	for(uint16_t i = 1; i< OXYMETER_MAX_BUFFER_SIZE; i++)
+	{
+		previousInput = MaxStruct->irRawBuffer[i-1];
+		currentInput = MaxStruct->irRawBuffer[i];
+		irRemovedDC[i] = 0.9755 * (float)currentInput - 0.9755 * (float)previousInput + 0.9510 * irRemovedDC[i-1];
+	}
+	// HPF: 1st order, Fc=0.8Hz, fs=100
+	for(uint16_t i = 1; i< OXYMETER_MAX_BUFFER_SIZE; i++)
+	{
+		previousInput = MaxStruct->redRawBuffer[i-1];
+		currentInput = MaxStruct->redRawBuffer[i];
+		redRemovedDC[i] = 0.9755 * (float)currentInput - 0.9755 * (float)previousInput + 0.9510 * redRemovedDC[i-1];
+	}
+	/************LPF Filtering************/
+	float irFiltered [OXYMETER_MAX_BUFFER_SIZE]={0};
+	// HPF: 2nd order, Fc=2Hz, fs=100
+	for(uint16_t i = 2; i< OXYMETER_MAX_BUFFER_SIZE; i++)
+		irFiltered[i] = 0.0036 * irRemovedDC[i] + 0.0072 * irRemovedDC[i-1] + 0.0036 * irRemovedDC[i-2] + 1.8227 * irFiltered[i-1] - 0.8372 * irFiltered[i-2];
+	/************Detecting Peaks***********/
+	uint8_t numOfPeaks=0;
+	uint16_t peakIndex[3]={0};
+	for(uint16_t i = (FILTERING_SAMPLES_SHIFT + WINDOW_FOR_DETECING_PEAK); i< (OXYMETER_MAX_BUFFER_SIZE - WINDOW_FOR_DETECING_PEAK); i++)
+	{
+		if (irFiltered[i] < irFiltered[i-1] && irFiltered[i] < irFiltered[i+1]) // min peak
+		{
+			if (irFiltered[i] < irFiltered[i - WINDOW_FOR_DETECING_PEAK] && irFiltered[i] < irFiltered[i + WINDOW_FOR_DETECING_PEAK])
+			{
+				numOfPeaks++;
+				peakIndex[numOfPeaks - 1] = i;
+				if (numOfPeaks == 3)
+					break;
+			}
+		}
+	}
+	MaxStruct->numOfPeaks = numOfPeaks;
+	/*****Calculating Heart Rate (HR)******/
+	uint16_t  peakInd1=0,  peakInd2=0,  peakInd3=0;
+	float durP1_P2=0, durP2_P3=0, samplesP1_P3=0;
+	float period=0;
+	float HR=0;
+	if (numOfPeaks == 3)
+	{
+		 peakInd1 = peakIndex[0];
+		 peakInd2 = peakIndex[1];
+		 peakInd3 = peakIndex[2];
+		 durP1_P2 = (peakInd2 - peakInd1) * ts;
+		 durP2_P3 = (peakInd3 - peakInd2) * ts;
+		 samplesP1_P3 = peakInd3 - peakInd1;
+		 MaxStruct->durationBetweenPeak1Peak2 = durP1_P2;
+		 MaxStruct->durationBetweenPeak2Peak3 = durP2_P3;
+		 MaxStruct->samplesBetweenPeak1Peak3 = samplesP1_P3;
+		 if (durP1_P2 > MIN_HEART_PERIOD_SEC && durP1_P2 < MAX_HEART_PERIOD_SEC)
+		 {
+			 if (durP1_P2 <= 1.2 * durP2_P3 && durP1_P2 >= 0.8 * durP2_P3)
+			 {
+				 period = (durP1_P2 + durP2_P3) / 2.0 ; // period = mean of (durP1_P2, durP2_P3)
+				 HR = 60.0 / period; // HR=60/T
+				 MaxStruct->heartRate = roundf(HR);
+			 }
+		 }
+		 else MaxStruct->heartRate = 0;
+	}
+	else MaxStruct->heartRate = 0;
+	/**********Calculating SPO2***********/
+	// Calibration array // SaO2 Look-up Table(http://www.ti.com/lit/an/slaa274b/slaa274b.pdf)
+	uint8_t spO2LUT [43]={100,100,100,100,99,99,99,99,99,99,98,98,98,98,98,97,97,97,97,97,97,96,96,96,96,96,96,95,95,95,95,95,95,94,94,94,94,94,93,93,93,93,93};
+	float irACSqSum=0, redACSqSum=0;
+	uint8_t SPO2Iindex=0, ratio=0, SPO2Value;
+	if(MaxStruct->mode == SPO2_MODE)
+	{
+	    if (HR !=0 )
+	    {
+	        for (uint16_t i=peakInd1; i<=peakInd3; i++)
+	        {
+	        	irACSqSum = irACSqSum + (irRemovedDC[i] * irRemovedDC[i]);
+	        	redACSqSum = redACSqSum + (redRemovedDC[i] * redRemovedDC[i]);
+	        }
+	        ratio = roundf(100.0 * log(redACSqSum/samplesP1_P3) / log(irACSqSum/samplesP1_P3));
+	        if(ratio > 66)
+	        	SPO2Iindex = ratio - 66;
+	        else if (ratio > 50)
+	        	SPO2Iindex = ratio - 50;
+	        SPO2Value = spO2LUT[SPO2Iindex];
+	        if(SPO2Value >= 93 && SPO2Value <= 100)
+	        	MaxStruct->SPO2 = SPO2Value;
+	        else
+	        	MaxStruct->SPO2 = 0;
+	    }
+	    else MaxStruct->SPO2 = 0;
+	}
+
+    MaxStruct-> processEndTick = HAL_GetTick();
+    MaxStruct->processTimeMs = MaxStruct-> processEndTick - MaxStruct-> processStartTick;
+}
+
+
+// This function should put within external interrupt function
+void Read_Data_When_Interrupt(MAX30100_s *MaxStruct)
+{
+	uint8_t interruptReg = 0;
+	MAX30100_Read(MAX30100_INTERRUPT_ADDR, &interruptReg, 1, 100);
+	// if Samples FIFO Buffer is full (A_Full==1)
+	if ( (interruptReg & MAX30100_INTERRUPT_A_FULL_MASK) >> MAX30100_INTERRUPT_A_FULL_POSITION )
+	{
+		MAX30100_Read_FIFO(MaxStruct);
+		MaxStruct->dataReadingFlag1 = 1;
+		MaxStruct->dataReadingFlag2 = 1;
+	}
+}
+
+void Oxymeter_Calculating_HR_SPO2(MAX30100_s *MaxStruct)
+{
+	Oxymeter_Detect_Finger(MaxStruct);
+	if (MaxStruct->fingerState == FINGER_STATE_DETECTED)
+	{
+		Oxymeter_Add_Samples_To_Buffers(MaxStruct);
+		Oxymeter_Modify_Led_Current_Bias(MaxStruct);
+	}
+	if (MaxStruct->bufferIndex == OXYMETER_MAX_BUFFER_SIZE)  // buffer is full
+			Oxymeter_Signal_Processing(MaxStruct);
+}
+
 
 /*-----------------------------------------------------------*/
 
