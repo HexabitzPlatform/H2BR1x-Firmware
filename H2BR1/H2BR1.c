@@ -44,6 +44,7 @@ module_param_t modParam[NUM_MODULE_PARAMS] ={{.paramPtr = NULL, .paramFormat =FM
 
 
 /* Private function prototypes -----------------------------------------------*/
+
 /**********************Generic Functions****************************/
 void MAX30100_Reset(MAX30100_s *MaxStruct);
 void MAX30100_Enable_Interrupt(MAX30100_s *MaxStruct, INTERRUPT_EN_A_FULL_BIT aFull, INTERRUPT_EN_TEMP_RDY_BIT tempRdy, INTERRUPT_EN_HR_RDY_BIT hrRdy, INTERRUPT_EN_SPO2_RDY_BIT Spo2Rdy);
@@ -58,6 +59,10 @@ void Oxymeter_Modify_Led_Current_Bias(MAX30100_s *MaxStruct);
 void Oxymeter_Add_Samples_To_Buffers(MAX30100_s *MaxStruct);
 void Oxymeter_Detect_Finger(MAX30100_s *MaxStruct);
 void Oxymeter_Signal_Processing(MAX30100_s *MaxStruct);
+
+//These two functions should be put in external interrupt service routine
+void Read_Data_When_Interrupt(MAX30100_s *MaxStruct);
+void Oxymeter_Calculating_HR_SPO2(MAX30100_s *MaxStruct);
 
 /* Create CLI commands --------------------------------------------------------*/
 
