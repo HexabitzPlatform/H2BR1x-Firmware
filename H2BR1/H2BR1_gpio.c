@@ -34,10 +34,10 @@ void GPIO_Init(void){
 
 	/*Configure GPIO pin Output Level */
 	 /*Configure GPIO pin : PD1 */
-	  GPIO_InitStruct.Pin = GPIO_PIN_1;
+	  GPIO_InitStruct.Pin = MAX30100_INT_Pin;
 	  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
 	  GPIO_InitStruct.Pull = GPIO_NOPULL;
-	  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+	  HAL_GPIO_Init(MAX30100_INT_GPIO_Port, &GPIO_InitStruct);
 
 	  /* EXTI interrupt init*/
 	  HAL_NVIC_SetPriority(EXTI0_1_IRQn, 1, 0);

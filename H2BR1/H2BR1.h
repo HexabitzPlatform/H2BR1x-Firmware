@@ -108,20 +108,19 @@
 
 #define NUM_MODULE_PARAMS		1
 
-/* EXG Module GPIO Pinout */
-#define SDN_EXG_Pin             GPIO_PIN_6
-#define SDN_EXG_GPIO_Port       GPIOA
-#define LODP_EXG_Pin            GPIO_PIN_7
-#define LODP_EXG_GPIO_Port      GPIOA
-#define LODN_EXG_Pin            GPIO_PIN_0
-#define LODN_EXG_GPIO_Port      GPIOB
+
+
 
 /* Module Special I2C */
 
-#define MCU_SCL_Pin             GPIO_PIN_3
-#define MCU_SCL_GPIO_Port       GPIOB
-#define MCU_SDA_Pin             GPIO_PIN_4
-#define MCU_SDA_GPIO_Port       GPIOB
+#define MCU_SCL_Pin                  GPIO_PIN_3
+#define MCU_SCL_GPIO_Port            GPIOB
+#define MCU_SDA_Pin                  GPIO_PIN_4
+#define MCU_SDA_GPIO_Port            GPIOB
+/* EXT Module GPIO Pinout */
+#define MAX30100_INT_Pin             GPIO_PIN_1
+#define MAX30100_INT_GPIO_Port       GPIOD
+
 
 /* H2BR1 Module Special Timer */
 
@@ -389,7 +388,6 @@ typedef struct
 	uint32_t processTimeMs;
 }MAX30100_s;
 
-//MAX30100 extern variables
 
 
 /* Export UART variables */
