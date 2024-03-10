@@ -390,7 +390,7 @@ typedef struct
 }MAX30100_s;
 
 //MAX30100 extern variables
-extern MAX30100_s max30100;
+
 
 /* Export UART variables */
 extern UART_HandleTypeDef huart1;
@@ -418,6 +418,15 @@ extern void ExecuteMonitor(void);
 void SetupPortForRemoteBootloaderUpdate(uint8_t port);
 void remoteBootloaderUpdate(uint8_t src,uint8_t dst,uint8_t inport,uint8_t outport);
 
+Module_Status Init_Setting(MAX30100_s *MaxStruct, MAX30100_MODE mode);
+Module_Status Plot_To_UART(MAX30100_s *MaxStruct, UART_HandleTypeDef *huart, MAX30100_MODE mode);
+Module_Status HR_Mode_Read_Buffer(MAX30100_s *MaxStruct, uint16_t *irSampleBuffer);
+Module_Status SPO2_Mode_Read_Buffer(MAX30100_s *MaxStruct, uint16_t *redSampleBuffer, uint16_t *irSampleBuffer);
+Module_Status Get_Finger_State(MAX30100_s *MaxStruct, FINGER_STATE *fingerState);
+Module_Status Get_HR(MAX30100_s *MaxStruct, uint8_t *heartRate);
+Module_Status Get_SPO2(MAX30100_s *MaxStruct, uint8_t *SPO2);
+Module_Status Reset_SampleRead_Flag(MAX30100_s *MaxStruct);
+Module_Status Get_SampleRead_Flag(MAX30100_s *MaxStruct, uint8_t *sampleReadFlag);
 
 /* -----------------------------------------------------------------------
  |								Commands							      ||
