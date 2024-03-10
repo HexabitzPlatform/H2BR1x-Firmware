@@ -446,7 +446,6 @@ void RegisterModuleCLICommands(void){
  |							 	Local  APIs			    		          | 																 	|
 /* -----------------------------------------------------------------------
  * */
-
 void MAX30100_Reset(MAX30100_s *MaxStruct)
 {
 	uint8_t modeConfReg = 0;
@@ -457,7 +456,7 @@ void MAX30100_Reset(MAX30100_s *MaxStruct)
 	MaxStruct->modeConfReg=modeConfReg;
 }
 
-
+/*-----------------------------------------------------------*/
 void MAX30100_Enable_Interrupt(MAX30100_s *MaxStruct, INTERRUPT_EN_A_FULL_BIT aFull, INTERRUPT_EN_TEMP_RDY_BIT tempRdy, INTERRUPT_EN_HR_RDY_BIT hrRdy, INTERRUPT_EN_SPO2_RDY_BIT Spo2Rdy)
 {
 	uint8_t interrEnReg = aFull | tempRdy | hrRdy | Spo2Rdy;
@@ -465,7 +464,7 @@ void MAX30100_Enable_Interrupt(MAX30100_s *MaxStruct, INTERRUPT_EN_A_FULL_BIT aF
 	MaxStruct->interruptEnableReg = interrEnReg;
 }
 
-
+/*-----------------------------------------------------------*/
 void MAX30100_Set_Mode(MAX30100_s *MaxStruct, MAX30100_MODE mode)
 {
 	MaxStruct->mode = mode;
@@ -488,7 +487,7 @@ void MAX30100_Set_Mode(MAX30100_s *MaxStruct, MAX30100_MODE mode)
 	MAX30100_Enable_Interrupt(MaxStruct,INTERRUPT_EN_AFULL_ENABLED, INTERRUPT_EN_TEMP_RDY_DISABLED, INTERRUPT_EN_HR_RDY_DISABLED, INTERRUPT_EN_SPO2_RDY_DISABLED);
 }
 
-
+/*-----------------------------------------------------------*/
 void MAX30100_Set_SpO2_SampleRate(MAX30100_s *MaxStruct, MAX30100_SpO2_SR sampleRate )
 {
 	MaxStruct->SPO2SampleRate= sampleRate;
@@ -499,7 +498,7 @@ void MAX30100_Set_SpO2_SampleRate(MAX30100_s *MaxStruct, MAX30100_SpO2_SR sample
 	MaxStruct->SPO2ConfReg = SPO2ConfReg;
 }
 
-
+/*-----------------------------------------------------------*/
 void MAX30100_Set_Led_PulseWidth(MAX30100_s *MaxStruct, MAX30100_LED_PW pulseWidth )
 {
 	MaxStruct->ledPulseWidth = pulseWidth;
@@ -510,6 +509,7 @@ void MAX30100_Set_Led_PulseWidth(MAX30100_s *MaxStruct, MAX30100_LED_PW pulseWid
 	MaxStruct->SPO2ConfReg = SPO2ConfReg;
 }
 
+/*-----------------------------------------------------------*/
 void MAX30100_Set_Led_Current(MAX30100_s *MaxStruct, MAX30100_LED_Current redPa, MAX30100_LED_Current irPa )
 {
 	MaxStruct->redPa = redPa;
@@ -519,7 +519,7 @@ void MAX30100_Set_Led_Current(MAX30100_s *MaxStruct, MAX30100_LED_Current redPa,
 	MaxStruct->ledConfReg= ledConfReg;
 }
 
-
+/*-----------------------------------------------------------*/
 void MAX30100_Read_FIFO(MAX30100_s *MaxStruct)
 {
 	uint8_t fifoData[MAX30100_FIFO_DATA_SIZE] = {0};
@@ -535,6 +535,7 @@ void MAX30100_Read_FIFO(MAX30100_s *MaxStruct)
 	}
  }
 
+/*-----------------------------------------------------------*/
 void MAX30100_Clear_FIFO(void)
 {
 	MAX30100_Write(MAX30100_FIFO_W_PTR_ADDR, 0x00, 100);
@@ -542,8 +543,7 @@ void MAX30100_Clear_FIFO(void)
 	MAX30100_Write(MAX30100_FIFO_R_PTR_ADDR, 0x00, 100);
 }
 
-
-
+/*-----------------------------------------------------------*/
 void Oxymeter_Add_Samples_To_Buffers(MAX30100_s *MaxStruct)
 {
 	uint16_t buffIndex = MaxStruct->bufferIndex; // last value of bufferIndex
@@ -561,6 +561,7 @@ void Oxymeter_Add_Samples_To_Buffers(MAX30100_s *MaxStruct)
 	MaxStruct->bufferIndex = buffIndex;
 }
 
+/*-----------------------------------------------------------*/
 void Oxymeter_Modify_Led_Current_Bias(MAX30100_s *MaxStruct)
 {
 	if(MaxStruct->mode == SPO2_MODE)
@@ -593,7 +594,7 @@ void Oxymeter_Modify_Led_Current_Bias(MAX30100_s *MaxStruct)
 	}
 }
 
-
+/*-----------------------------------------------------------*/
 void Oxymeter_Detect_Finger(MAX30100_s *MaxStruct)
 {
 	MaxStruct->fingerState = FINGER_STATE_NOT_DETECTED;
@@ -612,6 +613,7 @@ void Oxymeter_Detect_Finger(MAX30100_s *MaxStruct)
 		}
 }
 
+/*-----------------------------------------------------------*/
 void Oxymeter_Signal_Processing(MAX30100_s *MaxStruct)
 {
 	MaxStruct-> processStartTick = HAL_GetTick();
@@ -718,7 +720,7 @@ void Oxymeter_Signal_Processing(MAX30100_s *MaxStruct)
     MaxStruct->processTimeMs = MaxStruct-> processEndTick - MaxStruct-> processStartTick;
 }
 
-
+/*-----------------------------------------------------------*/
 // This function should put within external interrupt function
 void Read_Data_When_Interrupt(MAX30100_s *MaxStruct)
 {
@@ -733,6 +735,7 @@ void Read_Data_When_Interrupt(MAX30100_s *MaxStruct)
 	}
 }
 
+/*-----------------------------------------------------------*/
 void Oxymeter_Calculating_HR_SPO2(MAX30100_s *MaxStruct)
 {
 	Oxymeter_Detect_Finger(MaxStruct);
@@ -745,36 +748,125 @@ void Oxymeter_Calculating_HR_SPO2(MAX30100_s *MaxStruct)
 			Oxymeter_Signal_Processing(MaxStruct);
 }
 
-
-/*-----------------------------------------------------------*/
-
-/*-----------------------------------------------------------*/
-
-/*-----------------------------------------------------------*/
-
-/*-----------------------------------------------------------*/
-
-/*-----------------------------------------------------------*/
-
-/*-----------------------------------------------------------*/
-
-
 /* -----------------------------------------------------------------------
  |								  APIs							          |
 /* -----------------------------------------------------------------------
  */
 
+HAL_StatusTypeDef Init_Setting(MAX30100_s *MaxStruct, MAX30100_MODE mode)
+{
+	HAL_StatusTypeDef STATUS = HAL_OK;
+	if(mode == UNUSED_MODE || mode == HR_MODE || mode == SPO2_MODE)
+	{
+		MAX30100_Set_Led_Current(MaxStruct,  MAX30100_LED_CURRENT_33P8, MAX30100_LED_CURRENT_50P0); // primary values of RedLed 33.8 mA and IrLed 50mA so that received light intensity (from Red and Ir) is nearly adjacent but it is different from finger to other..
+		MAX30100_Set_Led_PulseWidth(MaxStruct, MAX30100_LED_PW_1600);
+		MAX30100_Set_SpO2_SampleRate(MaxStruct, MAX30100_SPO2_SR_100);
+		MAX30100_Set_Mode(MaxStruct, mode);
+		uint8_t interruptReg = 0;
+		STATUS = MAX30100_Read(MAX30100_INTERRUPT_ADDR, &interruptReg, 1, 100); // InterruptReg should be read firstly so that interrupt pin goes 'high'. When max30100 is booted interrupt pin is 'low'
+		HAL_Delay(10);
+	}
+	else STATUS = HAL_ERROR;
+	return STATUS;
+}
+
 /*-----------------------------------------------------------*/
+HAL_StatusTypeDef Plot_To_UART(MAX30100_s *MaxStruct, UART_HandleTypeDef *huart, MAX30100_MODE mode)
+{
+	HAL_StatusTypeDef STATUS = HAL_OK;
+	char sendData[20];
+	if(mode == HR_MODE)
+	{
+		if(MaxStruct->dataReadingFlag1 == 1)
+		{
+			MaxStruct->dataReadingFlag1 = 0;
+				for(uint8_t i = 0; i < MAX30100_FIFO_SAMPLES_SIZE; i++)
+				{
+					sprintf(sendData, "i%d\n", MaxStruct->irSamples[i]);
+					STATUS = HAL_UART_Transmit(huart,(uint8_t *)sendData, strlen(sendData), 100);
+				}
+		}
+	}
+	else if (mode == SPO2_MODE)
+	{
+		if(MaxStruct->dataReadingFlag1 == 1)
+		{
+			MaxStruct->dataReadingFlag1 = 0;
+				for(uint8_t i = 0; i < MAX30100_FIFO_SAMPLES_SIZE; i++)
+				{
+					sprintf(sendData, "i%dr%d\n", MaxStruct->irSamples[i], MaxStruct->redSamples[i]);
+					STATUS = HAL_UART_Transmit(huart,(uint8_t *)sendData, strlen(sendData), 100);
+				}
+		}
+	}
+	else STATUS = HAL_ERROR;
+	return STATUS;
+}
+
+/*-----------------------------------------------------------*/
+HAL_StatusTypeDef HR_Mode_Read_Buffer(MAX30100_s *MaxStruct, uint16_t *irSampleBuffer)
+{
+	HAL_StatusTypeDef STATUS = HAL_OK;
+	for(uint8_t i = 0; i < MAX30100_FIFO_SAMPLES_SIZE; i++)
+		irSampleBuffer[i] = MaxStruct->irSamples[i];
+	return STATUS;
+}
+
+/*-----------------------------------------------------------*/
+HAL_StatusTypeDef SPO2_Mode_Read_Buffer(MAX30100_s *MaxStruct, uint16_t *redSampleBuffer, uint16_t *irSampleBuffer)
+{
+	HAL_StatusTypeDef STATUS = HAL_OK;
+	for(uint8_t i = 0; i < MAX30100_FIFO_SAMPLES_SIZE; i++)
+	{
+		redSampleBuffer[i] = MaxStruct->redSamples[i];
+		irSampleBuffer[i] = MaxStruct->irSamples[i];
+	}
+	return STATUS;
+}
+
+/*-----------------------------------------------------------*/
+HAL_StatusTypeDef Get_SampleRead_Flag(MAX30100_s *MaxStruct, uint8_t *sampleReadFlag)
+{
+	HAL_StatusTypeDef STATUS = HAL_OK;
+	*sampleReadFlag = MaxStruct->dataReadingFlag2;
+	return STATUS;
+}
+
+/*-----------------------------------------------------------*/
+HAL_StatusTypeDef Reset_SampleRead_Flag(MAX30100_s *MaxStruct)
+{
+	HAL_StatusTypeDef STATUS = HAL_OK;
+	MaxStruct->dataReadingFlag2 = 0;
+	return STATUS;
+}
+
+/*-----------------------------------------------------------*/
+HAL_StatusTypeDef Get_Finger_State(MAX30100_s *MaxStruct, FINGER_STATE *fingerState)
+{
+	HAL_StatusTypeDef STATUS = HAL_OK;
+	*fingerState = MaxStruct->fingerState;
+	return STATUS;
+}
+
+/*-----------------------------------------------------------*/
+HAL_StatusTypeDef Get_HR(MAX30100_s *MaxStruct, uint8_t *heartRate)
+{
+	HAL_StatusTypeDef STATUS = HAL_OK;
+	*heartRate = MaxStruct->heartRate;
+	return STATUS;
+}
+
+/*-----------------------------------------------------------*/
+HAL_StatusTypeDef Get_SPO2(MAX30100_s *MaxStruct, uint8_t *SPO2)
+{
+	HAL_StatusTypeDef STATUS = HAL_OK;
+	*SPO2 = MaxStruct->SPO2;
+	return STATUS;
+}
 
 /*-----------------------------------------------------------*/
 
-/*-----------------------------------------------------------*/
 
-/*-----------------------------------------------------------*/
-
-/*-----------------------------------------------------------*/
-
-/*-----------------------------------------------------------*/
 
 
 /* -----------------------------------------------------------------------
