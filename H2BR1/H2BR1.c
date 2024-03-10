@@ -39,8 +39,8 @@ module_param_t modParam[NUM_MODULE_PARAMS] ={{.paramPtr = NULL, .paramFormat =FM
 
 
 /* Private variables ---------------------------------------------------------*/
-//TaskHandle_t EXGTaskHandle = NULL;
 
+MAX30100_s MaxStruct;
 
 
 /* Private function prototypes -----------------------------------------------*/

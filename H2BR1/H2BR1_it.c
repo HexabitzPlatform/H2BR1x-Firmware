@@ -23,8 +23,12 @@ extern uint8_t UARTRxBufIndex[NumOfPorts];
 
 extern TaskHandle_t xCommandConsoleTaskHandle; // CLI Task handler.
 
- TIM_HandleTypeDef htim2;
- extern DMA_HandleTypeDef hdma_adc1;
+extern void Read_Data_When_Interrupt(MAX30100_s *MaxStruct);
+extern void Oxymeter_Calculating_HR_SPO2(MAX30100_s *MaxStruct);
+
+extern MAX30100_s MaxStruct;
+
+extern DMA_HandleTypeDef hdma_adc1;
 /******************************************************************************/
 /*            Cortex-M0 Processor Interruption and Exception Handlers         */
 /******************************************************************************/
@@ -333,18 +337,21 @@ void vApplicationMallocFailedHook(void){
 }
 /*-----------------------------------------------------------*/
 
-/**
-  * @brief This function handles TIM2 global interrupt.
-  */
-void TIM2_IRQHandler(void)
+void EXTI0_1_IRQHandler(void)
 {
-  /* USER CODE BEGIN TIM2_IRQn 0 */
+  /* USER CODE BEGIN EXTI0_1_IRQn 0 */
 
-  /* USER CODE END TIM2_IRQn 0 */
-  HAL_TIM_IRQHandler(&htim2);
-  /* USER CODE BEGIN TIM2_IRQn 1 */
+  /* USER CODE END EXTI0_1_IRQn 0 */
+  HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_1);
+  Read_Data_When_Interrupt(&MaxStruct);
+  Oxymeter_Calculating_HR_SPO2(&MaxStruct);
 
-  /* USER CODE END TIM2_IRQn 1 */
+  /* USER CODE BEGIN EXTI0_1_IRQn 1 */
+
+  /* USER CODE END EXTI0_1_IRQn 1 */
 }
+
+
+
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
