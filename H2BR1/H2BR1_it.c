@@ -23,10 +23,10 @@ extern uint8_t UARTRxBufIndex[NumOfPorts];
 
 extern TaskHandle_t xCommandConsoleTaskHandle; // CLI Task handler.
 
-extern void Read_Data_When_Interrupt(MAX30100_s *MaxStruct);
-extern void Oxymeter_Calculating_HR_SPO2(MAX30100_s *MaxStruct);
+extern void Read_Data_When_Interrupt();
+extern void Oxymeter_Calculating_HR_SPO2();
 
-extern MAX30100_s MaxStruct;
+
 
 extern DMA_HandleTypeDef hdma_adc1;
 /******************************************************************************/
@@ -343,8 +343,8 @@ void EXTI0_1_IRQHandler(void)
 
   /* USER CODE END EXTI0_1_IRQn 0 */
   HAL_GPIO_EXTI_IRQHandler(MAX30100_INT_Pin);
-  Read_Data_When_Interrupt(&MaxStruct);
-  Oxymeter_Calculating_HR_SPO2(&MaxStruct);
+  Read_Data_When_Interrupt();
+  Oxymeter_Calculating_HR_SPO2();
 
   /* USER CODE BEGIN EXTI0_1_IRQn 1 */
 
