@@ -773,7 +773,7 @@ Module_Status Init_Setting(MAX30100_MODE mode)
 }
 
 /*-----------------------------------------------------------*/
-Module_Status Plot_To_UART(UART_HandleTypeDef *huart, MAX30100_MODE mode)
+Module_Status Plot_To_UART(uint8_t port, MAX30100_MODE mode)
 {
 	uint8_t status = H2BR1_OK;
 	char sendData[20];
@@ -785,7 +785,7 @@ Module_Status Plot_To_UART(UART_HandleTypeDef *huart, MAX30100_MODE mode)
 				for(uint8_t i = 0; i < MAX30100_FIFO_SAMPLES_SIZE; i++)
 				{
 					sprintf(sendData, "i%d\n", MaxStruct.irSamples[i]);
-					HAL_UART_Transmit(huart,(uint8_t *)sendData, strlen(sendData), 100);
+					HAL_UART_Transmit(GetUart(port),(uint8_t *)sendData, strlen(sendData), 100);
 				}
 		}
 	}
@@ -797,7 +797,7 @@ Module_Status Plot_To_UART(UART_HandleTypeDef *huart, MAX30100_MODE mode)
 				for(uint8_t i = 0; i < MAX30100_FIFO_SAMPLES_SIZE; i++)
 				{
 					sprintf(sendData, "i%dr%d\n", MaxStruct.irSamples[i], MaxStruct.redSamples[i]);
-					HAL_UART_Transmit(huart,(uint8_t *)sendData, strlen(sendData), 100);
+					HAL_UART_Transmit(GetUart(port),(uint8_t *)sendData, strlen(sendData), 100);
 				}
 		}
 	}

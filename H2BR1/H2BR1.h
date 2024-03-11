@@ -417,7 +417,7 @@ void SetupPortForRemoteBootloaderUpdate(uint8_t port);
 void remoteBootloaderUpdate(uint8_t src,uint8_t dst,uint8_t inport,uint8_t outport);
 
 Module_Status Init_Setting(MAX30100_MODE mode);
-Module_Status Plot_To_UART(UART_HandleTypeDef *huart, MAX30100_MODE mode);
+Module_Status Plot_To_UART(uint8_t port, MAX30100_MODE mode);
 Module_Status HR_Mode_Read_Buffer(uint16_t *irSampleBuffer);
 Module_Status SPO2_Mode_Read_Buffer(uint16_t *redSampleBuffer, uint16_t *irSampleBuffer);
 Module_Status Get_Finger_State(FINGER_STATE *fingerState);
