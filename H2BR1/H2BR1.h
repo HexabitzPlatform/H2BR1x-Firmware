@@ -353,7 +353,7 @@ typedef enum
 }CURRENT_BIAS_STATE;
 /*****************************************************************/
 
-struct MAX30100_s
+typedef struct
 {
 	uint8_t interruptFlag;
 	MAX30100_MODE		  mode;
@@ -386,9 +386,9 @@ struct MAX30100_s
 	uint32_t processStartTick;
 	uint32_t processEndTick;
 	uint32_t processTimeMs;
-};
+}MAX30100_s;
 
-extern struct MAX30100_s MaxStruct;
+extern  MAX30100_s MaxStruct;
 
 /* Export UART variables */
 extern UART_HandleTypeDef huart1;

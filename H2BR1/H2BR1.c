@@ -40,7 +40,7 @@ module_param_t modParam[NUM_MODULE_PARAMS] ={{.paramPtr = NULL, .paramFormat =FM
 
 /* Private variables ---------------------------------------------------------*/
 
-struct MAX30100_s MaxStruct;
+ MAX30100_s MaxStruct;
 
 
 /* Private function prototypes -----------------------------------------------*/
