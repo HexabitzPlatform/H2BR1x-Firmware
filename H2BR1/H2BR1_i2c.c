@@ -16,6 +16,9 @@
 
 I2C_HandleTypeDef hi2c2;
 
+Module_Status MAX30100_Write(uint8_t regAddr, uint8_t txData, uint32_t timeout);
+Module_Status MAX30100_Read(uint8_t regAddr, uint8_t *pRxData, uint8_t size, uint32_t timeout);
+
 /* I2C2 init function */
 void MX_I2C2_Init(void)
 {

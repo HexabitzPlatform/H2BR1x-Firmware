@@ -16,6 +16,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "BOS.h"
 #include "H2BR1_inputs.h"
+#include "H2BR1_i2c.h"
 
 /* Define UART variables */
 UART_HandleTypeDef huart1;
@@ -30,8 +31,7 @@ extern FLASH_ProcessTypeDef pFlash;
 extern uint8_t numOfRecordedSnippets;
 
 /* Exported functions */
-extern Module_Status MAX30100_Write(uint8_t regAddr, uint8_t txData, uint32_t timeout);
-extern Module_Status MAX30100_Read(uint8_t regAddr, uint8_t *pRxData, uint8_t size, uint32_t timeout);
+
 
 
 /* Module exported parameters ------------------------------------------------*/
@@ -40,7 +40,7 @@ module_param_t modParam[NUM_MODULE_PARAMS] ={{.paramPtr = NULL, .paramFormat =FM
 
 /* Private variables ---------------------------------------------------------*/
 
- MAX30100_s MaxStruct;
+MAX30100_s MaxStruct;
 
 
 /* Private function prototypes -----------------------------------------------*/

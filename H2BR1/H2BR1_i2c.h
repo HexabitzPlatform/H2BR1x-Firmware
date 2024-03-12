@@ -24,6 +24,9 @@ extern "C" {
 
 extern I2C_HandleTypeDef hi2c2;
 
+extern Module_Status MAX30100_Write(uint8_t regAddr, uint8_t txData, uint32_t timeout);
+extern Module_Status MAX30100_Read(uint8_t regAddr, uint8_t *pRxData, uint8_t size, uint32_t timeout);
+
 /* USER CODE BEGIN Private defines */
 
 /* USER CODE END Private defines */
