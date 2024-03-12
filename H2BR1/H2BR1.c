@@ -344,9 +344,8 @@ void Module_Peripheral_Init(void){
 	MX_USART4_UART_Init();
 	MX_USART5_UART_Init();
 	MX_USART6_UART_Init();
-
 	MX_I2C2_Init();
-
+	Init_MAX30100();
 	 //Circulating DMA Channels ON All Module
 	for (int i = 1; i <= NumOfPorts; i++) {
 		if (GetUart(i) == &huart1) {
@@ -754,21 +753,20 @@ void Oxymeter_Calculating_HR_SPO2()
 /* -----------------------------------------------------------------------
  */
 
-Module_Status Init_Setting(MAX30100_MODE mode)
+Module_Status Init_MAX30100(void)
 {
-	uint8_t status = H2BR1_OK;
-	if(mode == UNUSED_MODE || mode == HR_MODE || mode == SPO2_MODE)
-	{
+	uint8_t status = H2BR1_ERROR;
+	uint8_t mode = SPO2_MODE;
+
 		MAX30100_Set_Led_Current(MAX30100_LED_CURRENT_33P8, MAX30100_LED_CURRENT_50P0); // primary values of RedLed 33.8 mA and IrLed 50mA so that received light intensity (from Red and Ir) is nearly adjacent but it is different from finger to other..
 		MAX30100_Set_Led_PulseWidth(MAX30100_LED_PW_1600);
 		MAX30100_Set_SpO2_SampleRate(MAX30100_SPO2_SR_100);
 		MAX30100_Set_Mode(mode);
 		uint8_t interruptReg = 0;
-		MAX30100_Read(MAX30100_INTERRUPT_ADDR, &interruptReg, 1, 100); // InterruptReg should be read firstly so that interrupt pin goes 'high'. When max30100 is booted interrupt pin is 'low'
-		HAL_Delay(10);
-	}
-	else
-		status = H2BR1_ERR_WrongParams;
+		if (MAX30100_Read(MAX30100_INTERRUPT_ADDR, &interruptReg, 1, 100) == H2BR1_OK) // InterruptReg should be read firstly so that interrupt pin goes 'high'. When max30100 is booted interrupt pin is 'low'
+			status = H2BR1_OK;
+	    else
+		    status = H2BR1_ERR_WrongParams;
 	return status;
 }
 
