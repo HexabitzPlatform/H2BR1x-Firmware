@@ -266,6 +266,12 @@ typedef enum
 	SPO2_MODE      = 0x03U,
 }MAX30100_MODE;
 
+typedef enum
+{
+	HR = 0,
+	SPO2 ,
+} Sensor;
+
 /* Table 4. SPO2 Sample Rate Control Page 16*/
 /*************************************************************
 Table 8 and Table 9 Page 19
@@ -417,8 +423,8 @@ void remoteBootloaderUpdate(uint8_t src,uint8_t dst,uint8_t inport,uint8_t outpo
 
 Module_Status Init_MAX30100(void);
 Module_Status PlotToTerminal(uint8_t port, MAX30100_MODE mode);
-Module_Status HRMode_ReadBuffer(uint16_t *irSampleBuffer);
-Module_Status SPO2Mode_ReadBuffer(uint16_t *redSampleBuffer, uint16_t *irSampleBuffer);
+Module_Status HR_ReadBuffer(uint16_t *irSampleBuffer);
+Module_Status SPO2_ReadBuffer(uint16_t *redSampleBuffer, uint16_t *irSampleBuffer);
 Module_Status FingerState(FINGER_STATE *fingerState);
 Module_Status HR_Sample(uint8_t *heartRate);
 Module_Status SPO2_Sample(uint8_t *SPO2);

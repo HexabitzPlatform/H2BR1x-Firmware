@@ -808,7 +808,7 @@ Module_Status PlotToTerminal(uint8_t port, MAX30100_MODE mode)
 }
 
 /*-----------------------------------------------------------*/
-Module_Status HRMode_ReadBuffer(uint16_t *irSampleBuffer)
+Module_Status HR_ReadBuffer(uint16_t *irSampleBuffer)
 {
 	uint8_t status = H2BR1_OK;
 	for(uint8_t i = 0; i < MAX30100_FIFO_SAMPLES_SIZE; i++)
@@ -817,7 +817,7 @@ Module_Status HRMode_ReadBuffer(uint16_t *irSampleBuffer)
 }
 
 /*-----------------------------------------------------------*/
-Module_Status SPO2Mode_ReadBuffer(uint16_t *redSampleBuffer, uint16_t *irSampleBuffer)
+Module_Status SPO2_ReadBuffer(uint16_t *redSampleBuffer, uint16_t *irSampleBuffer)
 {
 	uint8_t status = H2BR1_OK;
 	for(uint8_t i = 0; i < MAX30100_FIFO_SAMPLES_SIZE; i++)
@@ -869,7 +869,51 @@ Module_Status SPO2_Sample(uint8_t *SPO2)
 }
 
 /*-----------------------------------------------------------*/
+Module_Status SampletoPort(uint8_t module,uint8_t port, Sensor Sensor)
+{
+	uint8_t HRValue = 0 ;
+	uint8_t SPO2Value = 0;
+	uint8_t status =H2BR1_OK;
 
+	if(port == 0)
+	return H2BR1_ERR_WrongParams;
+
+	switch (Sensor)
+	{
+	case HR:
+		status = HR_Sample(&HRValue);
+		if (module == myID)
+		{
+			writePxITMutex(port,(char* )&HRValue,sizeof(uint8_t),10);
+		}
+		else
+		{
+			messageParams[0] =port;
+			messageParams[1] =(uint8_t)HRValue;
+			SendMessageToModule(module,CODE_PORT_FORWARD,sizeof(uint8_t)+1);
+		}
+		break;
+	case SPO2:
+		status = SPO2_Sample(&SPO2Value);
+		if (module == myID)
+		{
+			writePxITMutex(port,(char* )&SPO2Value,sizeof(uint8_t),10);
+		}
+		else
+		{
+			messageParams[0] =port;
+			messageParams[1] =(uint8_t)SPO2Value;
+			SendMessageToModule(module,CODE_PORT_FORWARD,sizeof(uint8_t)+1);
+		}
+		break;
+
+	default:
+			status=H2BR1_ERR_WrongParams;
+	    break;
+
+	}
+	return status;
+}
 
 
 
