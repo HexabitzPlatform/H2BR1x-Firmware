@@ -416,14 +416,14 @@ void SetupPortForRemoteBootloaderUpdate(uint8_t port);
 void remoteBootloaderUpdate(uint8_t src,uint8_t dst,uint8_t inport,uint8_t outport);
 
 Module_Status Init_MAX30100(void);
-Module_Status Plot_To_UART(uint8_t port, MAX30100_MODE mode);
-Module_Status HR_Mode_Read_Buffer(uint16_t *irSampleBuffer);
-Module_Status SPO2_Mode_Read_Buffer(uint16_t *redSampleBuffer, uint16_t *irSampleBuffer);
-Module_Status Get_Finger_State(FINGER_STATE *fingerState);
-Module_Status Get_HR(uint8_t *heartRate);
-Module_Status Get_SPO2(uint8_t *SPO2);
-Module_Status Reset_SampleRead_Flag();
-Module_Status Get_SampleRead_Flag(uint8_t *sampleReadFlag);
+Module_Status PlotToTerminal(uint8_t port, MAX30100_MODE mode);
+Module_Status HRMode_ReadBuffer(uint16_t *irSampleBuffer);
+Module_Status SPO2Mode_ReadBuffer(uint16_t *redSampleBuffer, uint16_t *irSampleBuffer);
+Module_Status FingerState(FINGER_STATE *fingerState);
+Module_Status HR_Sample(uint8_t *heartRate);
+Module_Status SPO2_Sample(uint8_t *SPO2);
+Module_Status SampleReadFlag(uint8_t *sampleReadFlag);
+Module_Status ResetSampleReadFlag();
 
 /* -----------------------------------------------------------------------
  |								Commands							      ||

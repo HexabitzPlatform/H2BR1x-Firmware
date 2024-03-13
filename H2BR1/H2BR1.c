@@ -755,7 +755,7 @@ void Oxymeter_Calculating_HR_SPO2()
 
 Module_Status Init_MAX30100(void)
 {
-	uint8_t status = H2BR1_ERROR;
+	uint8_t status = H2BR1_OK;
 	uint8_t mode = SPO2_MODE;
 
 		MAX30100_Set_Led_Current(MAX30100_LED_CURRENT_33P8, MAX30100_LED_CURRENT_50P0); // primary values of RedLed 33.8 mA and IrLed 50mA so that received light intensity (from Red and Ir) is nearly adjacent but it is different from finger to other..
@@ -771,10 +771,13 @@ Module_Status Init_MAX30100(void)
 }
 
 /*-----------------------------------------------------------*/
-Module_Status Plot_To_UART(uint8_t port, MAX30100_MODE mode)
+Module_Status PlotToTerminal(uint8_t port, MAX30100_MODE mode)
 {
 	uint8_t status = H2BR1_OK;
 	char sendData[20];
+	if(port == 0)
+	return H2BR1_ERR_WrongParams;
+
 	if(mode == HR_MODE)
 	{
 		if(MaxStruct.dataReadingFlag1 == 1)
@@ -805,7 +808,7 @@ Module_Status Plot_To_UART(uint8_t port, MAX30100_MODE mode)
 }
 
 /*-----------------------------------------------------------*/
-Module_Status HR_Mode_Read_Buffer(uint16_t *irSampleBuffer)
+Module_Status HRMode_ReadBuffer(uint16_t *irSampleBuffer)
 {
 	uint8_t status = H2BR1_OK;
 	for(uint8_t i = 0; i < MAX30100_FIFO_SAMPLES_SIZE; i++)
@@ -814,7 +817,7 @@ Module_Status HR_Mode_Read_Buffer(uint16_t *irSampleBuffer)
 }
 
 /*-----------------------------------------------------------*/
-Module_Status SPO2_Mode_Read_Buffer(uint16_t *redSampleBuffer, uint16_t *irSampleBuffer)
+Module_Status SPO2Mode_ReadBuffer(uint16_t *redSampleBuffer, uint16_t *irSampleBuffer)
 {
 	uint8_t status = H2BR1_OK;
 	for(uint8_t i = 0; i < MAX30100_FIFO_SAMPLES_SIZE; i++)
@@ -826,7 +829,7 @@ Module_Status SPO2_Mode_Read_Buffer(uint16_t *redSampleBuffer, uint16_t *irSampl
 }
 
 /*-----------------------------------------------------------*/
-Module_Status Get_SampleRead_Flag(uint8_t *sampleReadFlag)
+Module_Status SampleReadFlag(uint8_t *sampleReadFlag)
 {
 	uint8_t status = H2BR1_OK;
 	*sampleReadFlag = MaxStruct.dataReadingFlag2;
@@ -834,7 +837,7 @@ Module_Status Get_SampleRead_Flag(uint8_t *sampleReadFlag)
 }
 
 /*-----------------------------------------------------------*/
-Module_Status Reset_SampleRead_Flag()
+Module_Status ResetSampleReadFlag()
 {
 	uint8_t status = H2BR1_OK;
 	MaxStruct.dataReadingFlag2 = 0;
@@ -842,7 +845,7 @@ Module_Status Reset_SampleRead_Flag()
 }
 
 /*-----------------------------------------------------------*/
-Module_Status Get_Finger_State(FINGER_STATE *fingerState)
+Module_Status FingerState(FINGER_STATE *fingerState)
 {
 	uint8_t status = H2BR1_OK;
 	*fingerState = MaxStruct.fingerState;
@@ -850,7 +853,7 @@ Module_Status Get_Finger_State(FINGER_STATE *fingerState)
 }
 
 /*-----------------------------------------------------------*/
-Module_Status Get_HR(uint8_t *heartRate)
+Module_Status HR_Sample(uint8_t *heartRate)
 {
 	uint8_t status = H2BR1_OK;
 	*heartRate = MaxStruct.heartRate;
@@ -858,7 +861,7 @@ Module_Status Get_HR(uint8_t *heartRate)
 }
 
 /*-----------------------------------------------------------*/
-Module_Status Get_SPO2(uint8_t *SPO2)
+Module_Status SPO2_Sample(uint8_t *SPO2)
 {
 	uint8_t status = H2BR1_OK;
 	*SPO2 = MaxStruct.SPO2;
