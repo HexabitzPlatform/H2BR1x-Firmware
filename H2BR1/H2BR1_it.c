@@ -342,7 +342,7 @@ void EXTI0_1_IRQHandler(void)
   /* USER CODE BEGIN EXTI0_1_IRQn 0 */
 
   /* USER CODE END EXTI0_1_IRQn 0 */
-  HAL_GPIO_EXTI_IRQHandler(MAX30100_INT_Pin);
+  HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_1);
   Read_Data_When_Interrupt();
   Oxymeter_Calculating_HR_SPO2();
 

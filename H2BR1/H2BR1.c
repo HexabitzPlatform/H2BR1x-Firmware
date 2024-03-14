@@ -59,6 +59,8 @@ void Oxymeter_Signal_Processing();
 void Read_Data_When_Interrupt();
 void Oxymeter_Calculating_HR_SPO2();
 
+Module_Status Init_MAX30100(void);
+
 /* Create CLI commands --------------------------------------------------------*/
 
 
