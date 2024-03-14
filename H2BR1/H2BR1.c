@@ -32,20 +32,16 @@ extern uint8_t numOfRecordedSnippets;
 
 /* Exported functions */
 
-
+//uint32_t lastTick;
 
 /* Module exported parameters ------------------------------------------------*/
 module_param_t modParam[NUM_MODULE_PARAMS] ={{.paramPtr = NULL, .paramFormat =FMT_FLOAT, .paramName =""}};
-
-
+#define MIN_PERIOD_MS				100
 /* Private variables ---------------------------------------------------------*/
 
 MAX30100_s MaxStruct;
 
-
 /* Private function prototypes -----------------------------------------------*/
-
-/**********************Generic Functions****************************/
 void MAX30100_Reset();
 void MAX30100_Enable_Interrupt(INTERRUPT_EN_A_FULL_BIT aFull, INTERRUPT_EN_TEMP_RDY_BIT tempRdy, INTERRUPT_EN_HR_RDY_BIT hrRdy, INTERRUPT_EN_SPO2_RDY_BIT Spo2Rdy);
 void MAX30100_Set_Mode(MAX30100_MODE mode);
@@ -915,7 +911,26 @@ Module_Status SampletoPort(uint8_t module,uint8_t port, Sensor Sensor)
 	return status;
 }
 
+Module_Status StreamtoPort(uint8_t module,uint8_t port,Sensor Sensor,uint32_t Numofsamples,uint32_t timeout)
+{
+	uint8_t status =H2BR1_OK;
+	uint32_t samples=0;
+	uint32_t period=0;
+	period=timeout/Numofsamples;
 
+	if (timeout < MIN_PERIOD_MS || period < MIN_PERIOD_MS)
+		return H2BR1_ERR_WrongParams;
+
+	while(samples < Numofsamples)
+	{
+	status=SampletoPort(module,port,Sensor);
+	vTaskDelay(pdMS_TO_TICKS(period));
+	samples++;
+	}
+	samples=0;
+	return status;
+
+}
 
 /* -----------------------------------------------------------------------
  |								Commands							      |

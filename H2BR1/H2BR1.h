@@ -430,7 +430,8 @@ Module_Status HR_Sample(uint8_t *heartRate);
 Module_Status SPO2_Sample(uint8_t *SPO2);
 Module_Status SampleReadFlag(uint8_t *sampleReadFlag);
 Module_Status ResetSampleReadFlag();
-
+Module_Status SampletoPort(uint8_t module,uint8_t port, Sensor Sensor);
+Module_Status StreamtoPort(uint8_t module,uint8_t port,Sensor Sensor,uint32_t Numofsamples,uint32_t timeout);
 /* -----------------------------------------------------------------------
  |								Commands							      ||
 /* -----------------------------------------------------------------------
