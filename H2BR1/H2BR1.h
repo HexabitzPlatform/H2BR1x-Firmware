@@ -148,12 +148,12 @@ extern void ExecuteMonitor(void);
 void SetupPortForRemoteBootloaderUpdate(uint8_t port);
 void remoteBootloaderUpdate(uint8_t src,uint8_t dst,uint8_t inport,uint8_t outport);
 
+Module_Status HR_Sample(uint8_t *heartRate);
+Module_Status SPO2_Sample(uint8_t *SPO2);
+Module_Status FingerState(FINGER_STATE *fingerState);
 Module_Status PlotToTerminal(uint8_t port, MAX30100_MODE mode);
 Module_Status HR_ReadBuffer(uint16_t *irSampleBuffer);
 Module_Status SPO2_ReadBuffer(uint16_t *redSampleBuffer, uint16_t *irSampleBuffer);
-Module_Status FingerState(FINGER_STATE *fingerState);
-Module_Status HR_Sample(uint8_t *heartRate);
-Module_Status SPO2_Sample(uint8_t *SPO2);
 Module_Status SampleReadFlag(uint8_t *sampleReadFlag);
 Module_Status ResetSampleReadFlag();
 Module_Status SampletoPort(uint8_t module,uint8_t port, Sensor Sensor);
@@ -162,7 +162,9 @@ Module_Status StreamtoPort(uint8_t module,uint8_t port,Sensor Sensor,uint32_t Nu
  |								Commands							      ||
 /* -----------------------------------------------------------------------
  */
-
+extern const CLI_Command_Definition_t CLI_HR_SampleCommandDefinition;
+extern const CLI_Command_Definition_t CLI_SPO2_SampleCommandDefinition;
+extern const CLI_Command_Definition_t CLI_FingerStateCommandDefinition;
 
 #endif /* H2BR1_H */
 

@@ -41,6 +41,8 @@ module_param_t modParam[NUM_MODULE_PARAMS] ={{.paramPtr = NULL, .paramFormat =FM
 MAX30100_s MaxStruct;
 
 /* Private function prototypes -----------------------------------------------*/
+Module_Status Init_MAX30100(void);
+
 void MAX30100_Reset();
 void MAX30100_Enable_Interrupt(INTERRUPT_EN_A_FULL_BIT aFull, INTERRUPT_EN_TEMP_RDY_BIT tempRdy, INTERRUPT_EN_HR_RDY_BIT hrRdy, INTERRUPT_EN_SPO2_RDY_BIT Spo2Rdy);
 void MAX30100_Set_Mode(MAX30100_MODE mode);
@@ -59,11 +61,39 @@ void Oxymeter_Signal_Processing();
 void Read_Data_When_Interrupt();
 void Oxymeter_Calculating_HR_SPO2();
 
-Module_Status Init_MAX30100(void);
 
 /* Create CLI commands --------------------------------------------------------*/
+portBASE_TYPE CLI_HR_SampleCommand( int8_t *pcWriteBuffer, size_t xWriteBufferLen, const int8_t *pcCommandString );
+portBASE_TYPE CLI_SPO2_SampleCommand( int8_t *pcWriteBuffer, size_t xWriteBufferLen, const int8_t *pcCommandString );
+portBASE_TYPE CLI_FingerStateCommand( int8_t *pcWriteBuffer, size_t xWriteBufferLen, const int8_t *pcCommandString );
 
-
+/*-----------------------------------------------------------*/
+/* CLI command structure : ReadCellVoltage */
+const CLI_Command_Definition_t CLI_HR_SampleCommandDefinition =
+{
+	( const int8_t * ) "hrsample", /* The command string to type. */
+	( const int8_t * ) "hrsample:\r\nTake one sample measurement to measure heart rate 6 seconds after placing the hand on the sensor.\r\n\r\n",
+	CLI_HR_SampleCommand, /* The function to run. */
+	0 /* zero parameters are expected. */
+};
+/*-----------------------------------------------------------*/
+/* CLI command structure : ReadCellCurrent */
+const CLI_Command_Definition_t CLI_SPO2_SampleCommandDefinition =
+{
+	( const int8_t * ) "spo2sample", /* The command string to type. */
+	( const int8_t * ) "spo2sample:\r\nTake one sample measurement to measure oxygenation Rate 6 seconds after placing the hand on the sensor.\r\n\r\n",
+	CLI_SPO2_SampleCommand, /* The function to run. */
+	0 /* zero parameters are expected. */
+};
+/*-----------------------------------------------------------*/
+/* CLI command structure : ReadCellPower */
+const CLI_Command_Definition_t CLI_FingerStateCommandDefinition =
+{
+	( const int8_t * ) "fingerstate", /* The command string to type. */
+	( const int8_t * ) "fingerstate:\r\nFeel the presence of a finger on or near the sensor.\r\n\r\n",
+	CLI_FingerStateCommand, /* The function to run. */
+	0 /* zero parameters are expected. */
+};
 /*-----------------------------------------------------------*/
 
 
@@ -402,7 +432,9 @@ uint8_t GetPort(UART_HandleTypeDef *huart){
 /* --- Register this module CLI Commands
  */
 void RegisterModuleCLICommands(void){
-
+	FreeRTOS_CLIRegisterCommand(&CLI_HR_SampleCommandDefinition);
+	FreeRTOS_CLIRegisterCommand(&CLI_SPO2_SampleCommandDefinition);
+	FreeRTOS_CLIRegisterCommand(&CLI_FingerStateCommandDefinition);
 }
 
 /*-----------------------------------------------------------*/
@@ -933,18 +965,81 @@ Module_Status StreamtoPort(uint8_t module,uint8_t port,Sensor Sensor,uint32_t Nu
    -----------------------------------------------------------------------
  */
 
-/*-----------------------------------------------------------*/
+portBASE_TYPE CLI_HR_SampleCommand( int8_t *pcWriteBuffer, size_t xWriteBufferLen, const int8_t *pcCommandString ){
+	Module_Status status = H2BR1_OK;
+	uint8_t heartRate=0;
+	static const int8_t *pcOKMessage=(int8_t* )"Heart Rate is : %d bpm\n\r";
+	static const int8_t *pcErrorsMessage =(int8_t* )"Error Params!\n\r";
 
-/*-----------------------------------------------------------*/
+		(void )xWriteBufferLen;
+		configASSERT(pcWriteBuffer);
 
-/*-----------------------------------------------------------*/
+	 	status=HR_Sample(&heartRate);
 
-/*-----------------------------------------------------------*/
+	 if(status == H2BR1_OK)
+	 {
+			 sprintf((char* )pcWriteBuffer,(char* )pcOKMessage,heartRate);
 
-/*-----------------------------------------------------------*/
+	 }
 
-/*-----------------------------------------------------------*/
+	 else if(status == H2BR1_ERROR)
+			strcpy((char* )pcWriteBuffer,(char* )pcErrorsMessage);
 
+
+	return pdFALSE;
+
+}
+/*-----------------------------------------------------------*/
+portBASE_TYPE CLI_SPO2_SampleCommand( int8_t *pcWriteBuffer, size_t xWriteBufferLen, const int8_t *pcCommandString ){
+	Module_Status status = H2BR1_OK;
+	uint8_t oxygenationRate=0;
+	static const int8_t *pcOKMessage=(int8_t* )"Oxygenation Rate(SPO2) is : %d %%\n\r";
+	static const int8_t *pcErrorsMessage =(int8_t* )"Error Params!\n\r";
+
+		(void )xWriteBufferLen;
+		configASSERT(pcWriteBuffer);
+
+	 	status=SPO2_Sample(&oxygenationRate);
+
+	 if(status == H2BR1_OK)
+	 {
+			 sprintf((char* )pcWriteBuffer,(char* )pcOKMessage,oxygenationRate);
+
+	 }
+
+	 else if(status == H2BR1_ERROR)
+			strcpy((char* )pcWriteBuffer,(char* )pcErrorsMessage);
+
+
+	return pdFALSE;
+
+}
+/*-----------------------------------------------------------*/
+portBASE_TYPE CLI_FingerStateCommand( int8_t *pcWriteBuffer, size_t xWriteBufferLen, const int8_t *pcCommandString ){
+	Module_Status status = H2BR1_OK;
+	FINGER_STATE fingerState =0;
+	static const int8_t *pcOKMessage=(int8_t* )"FingerState is : %d \n\r";
+	static const int8_t *pcErrorsMessage =(int8_t* )"Error Params!\n\r";
+
+		(void )xWriteBufferLen;
+		configASSERT(pcWriteBuffer);
+
+	 	status=FingerState(&fingerState);
+
+	 if(status == H2BR1_OK)
+	 {
+			 sprintf((char* )pcWriteBuffer,(char* )pcOKMessage,fingerState);
+
+	 }
+
+	 else if(status == H2BR1_ERROR)
+			strcpy((char* )pcWriteBuffer,(char* )pcErrorsMessage);
+
+
+	return pdFALSE;
+
+}
+/*-----------------------------------------------------------*/
 
 
 /*-----------------------------------------------------------*/
