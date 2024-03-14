@@ -22,7 +22,6 @@
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 UART_HandleTypeDef huart3;
-UART_HandleTypeDef huart4;
 UART_HandleTypeDef huart5;
 UART_HandleTypeDef huart6;
 
@@ -337,7 +336,6 @@ void Module_Peripheral_Init(void){
 	MX_USART1_UART_Init();
 	MX_USART2_UART_Init();
 	MX_USART3_UART_Init();
-	MX_USART4_UART_Init();
 	MX_USART5_UART_Init();
 	MX_USART6_UART_Init();
 	MX_I2C2_Init();
@@ -350,8 +348,6 @@ void Module_Peripheral_Init(void){
 			index_dma[i - 1] = &(DMA1_Channel2->CNDTR);
 		} else if (GetUart(i) == &huart3) {
 			index_dma[i - 1] = &(DMA1_Channel3->CNDTR);
-		} else if (GetUart(i) == &huart4) {
-			index_dma[i - 1] = &(DMA1_Channel4->CNDTR);
 		} else if (GetUart(i) == &huart5) {
 			index_dma[i - 1] = &(DMA1_Channel4->CNDTR);
 		} else if (GetUart(i) == &huart6) {
@@ -395,9 +391,7 @@ uint8_t GetPort(UART_HandleTypeDef *huart){
 		return P4;
 	else if(huart->Instance == USART5)
 		return P5;
-	else if(huart->Instance == USART4)
-		return P6;
-	
+
 	return 0;
 }
 
