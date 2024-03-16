@@ -72,7 +72,7 @@ portBASE_TYPE CLI_FingerStateCommand( int8_t *pcWriteBuffer, size_t xWriteBuffer
 const CLI_Command_Definition_t CLI_HR_SampleCommandDefinition =
 {
 	( const int8_t * ) "hrsample", /* The command string to type. */
-	( const int8_t * ) "hrsample:\r\nTake one sample measurement to measure heart rate 6 seconds after placing the hand on the sensor.\r\n\r\n",
+	( const int8_t * ) "hrsample:\r\nTake one sample measurement to measure heart rate after 6 seconds from placing the hand on the sensor.\r\n\r\n",
 	CLI_HR_SampleCommand, /* The function to run. */
 	0 /* zero parameters are expected. */
 };
@@ -81,7 +81,7 @@ const CLI_Command_Definition_t CLI_HR_SampleCommandDefinition =
 const CLI_Command_Definition_t CLI_SPO2_SampleCommandDefinition =
 {
 	( const int8_t * ) "spo2sample", /* The command string to type. */
-	( const int8_t * ) "spo2sample:\r\nTake one sample measurement to measure oxygenation Rate 6 seconds after placing the hand on the sensor.\r\n\r\n",
+	( const int8_t * ) "spo2sample:\r\nTake one sample measurement to measure oxygenation rate after 6 seconds from placing the hand on the sensor.\r\n\r\n",
 	CLI_SPO2_SampleCommand, /* The function to run. */
 	0 /* zero parameters are expected. */
 };
@@ -776,7 +776,10 @@ void Oxymeter_Calculating_HR_SPO2()
  |								  APIs							          |
 /* -----------------------------------------------------------------------
  */
-
+/*
+ * @brief: initialize MAX30100
+ * @retval: status
+ */
 Module_Status Init_MAX30100(void)
 {
 	uint8_t status = H2BR1_OK;
@@ -795,6 +798,12 @@ Module_Status Init_MAX30100(void)
 }
 
 /*-----------------------------------------------------------*/
+/*
+ * @brief: Send (irSamples) or (irSamples+redSamples) to display on Terminal or draw signals for heart rate and oxygenation.
+ * @param1: The port you want to send from
+ * @param2: The mode to be selected (HR or SPO2)
+ * @retval: status
+ */
 Module_Status PlotToTerminal(uint8_t port, MAX30100_MODE mode)
 {
 	uint8_t status = H2BR1_OK;
@@ -809,7 +818,7 @@ Module_Status PlotToTerminal(uint8_t port, MAX30100_MODE mode)
 			MaxStruct.dataReadingFlag1 = 0;
 				for(uint8_t i = 0; i < MAX30100_FIFO_SAMPLES_SIZE; i++)
 				{
-					sprintf(sendData, "i%d\n", MaxStruct.irSamples[i]);
+					sprintf(sendData, "i%d\r\n", MaxStruct.irSamples[i]);
 					HAL_UART_Transmit(GetUart(port),(uint8_t *)sendData, strlen(sendData), 100);
 				}
 		}
@@ -821,7 +830,7 @@ Module_Status PlotToTerminal(uint8_t port, MAX30100_MODE mode)
 			MaxStruct.dataReadingFlag1 = 0;
 				for(uint8_t i = 0; i < MAX30100_FIFO_SAMPLES_SIZE; i++)
 				{
-					sprintf(sendData, "i%dr%d\n", MaxStruct.irSamples[i], MaxStruct.redSamples[i]);
+					sprintf(sendData, "i%dr%d\r\n", MaxStruct.irSamples[i], MaxStruct.redSamples[i]);
 					HAL_UART_Transmit(GetUart(port),(uint8_t *)sendData, strlen(sendData), 100);
 				}
 		}
@@ -853,6 +862,11 @@ Module_Status SPO2_ReadBuffer(uint16_t *redSampleBuffer, uint16_t *irSampleBuffe
 }
 
 /*-----------------------------------------------------------*/
+/*
+ * @brief: Sample Read Flag for IC MAX30100
+ * @param1:
+ * @retval: status
+ */
 Module_Status SampleReadFlag(uint8_t *sampleReadFlag)
 {
 	uint8_t status = H2BR1_OK;
@@ -861,6 +875,10 @@ Module_Status SampleReadFlag(uint8_t *sampleReadFlag)
 }
 
 /*-----------------------------------------------------------*/
+/*
+ * @brief: Reset Sample Read Flag for IC MAX30100
+ * @retval: status
+ */
 Module_Status ResetSampleReadFlag()
 {
 	uint8_t status = H2BR1_OK;
@@ -869,6 +887,11 @@ Module_Status ResetSampleReadFlag()
 }
 
 /*-----------------------------------------------------------*/
+/*
+ * @brief: read the presence of a finger on or near the sensor.
+ * @param1: pointer to a buffer to store value it always gives 1
+ * @retval: status
+ */
 Module_Status FingerState(FINGER_STATE *fingerState)
 {
 	uint8_t status = H2BR1_OK;
@@ -877,6 +900,11 @@ Module_Status FingerState(FINGER_STATE *fingerState)
 }
 
 /*-----------------------------------------------------------*/
+/*
+ * @brief: read heart rate after 6 seconds from placing the hand on the sensor.
+ * @param1: pointer to a buffer to store value
+ * @retval: status
+ */
 Module_Status HR_Sample(uint8_t *heartRate)
 {
 	uint8_t status = H2BR1_OK;
@@ -885,6 +913,11 @@ Module_Status HR_Sample(uint8_t *heartRate)
 }
 
 /*-----------------------------------------------------------*/
+/*
+ * @brief: read oxygenation rate after 6 seconds from placing the hand on the sensor.
+ * @param1: pointer to a buffer to store value
+ * @retval: status
+ */
 Module_Status SPO2_Sample(uint8_t *SPO2)
 {
 	uint8_t status = H2BR1_OK;
@@ -893,6 +926,8 @@ Module_Status SPO2_Sample(uint8_t *SPO2)
 }
 
 /*-----------------------------------------------------------*/
+
+
 Module_Status SampletoPort(uint8_t module,uint8_t port, Sensor Sensor)
 {
 	uint8_t HRValue = 0 ;
