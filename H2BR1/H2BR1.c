@@ -97,6 +97,7 @@ const CLI_Command_Definition_t CLI_FingerStateCommandDefinition =
 /*-----------------------------------------------------------*/
 
 
+
 /* -----------------------------------------------------------------------
  |						    	 Private Functions						 |
  -------------------------------------------------------------------------
@@ -799,7 +800,8 @@ Module_Status Init_MAX30100(void)
 
 /*-----------------------------------------------------------*/
 /*
- * @brief: Send (irSamples) or (irSamples+redSamples) to display on Terminal or draw signals for heart rate and oxygenation.
+ * @brief: Send (irSamples) or (irSamples+redSamples) to display on Terminal or draw
+ * signals for heart rate and oxygenation.
  * @param1: The port you want to send from
  * @param2: The mode to be selected (HR or SPO2)
  * @retval: status
@@ -841,6 +843,12 @@ Module_Status PlotToTerminal(uint8_t port, MAX30100_MODE mode)
 }
 
 /*-----------------------------------------------------------*/
+/*
+ * @brief: reads infrared samples from MaxStruct and stores them in the provided buffer.
+ * (Note: You can use them specifically to draw the signal).
+ * @param1: pointer to an array to store the infrared samples (16 samples).
+ * @retval: status
+ */
 Module_Status HR_ReadBuffer(uint16_t *irSampleBuffer)
 {
 	uint8_t status = H2BR1_OK;
@@ -850,6 +858,13 @@ Module_Status HR_ReadBuffer(uint16_t *irSampleBuffer)
 }
 
 /*-----------------------------------------------------------*/
+/*
+ * @brief: reads red and infrared samples from MaxStruct and stores them in the provided buffers.
+ * (Note: You can use them specifically to draw the signal).
+ * @param1: pointer to an array to store red samples (16 samples).
+ * @param2: pointer to an array to store infrared samples (16 samples).
+ * @retval: status
+ */
 Module_Status SPO2_ReadBuffer(uint16_t *redSampleBuffer, uint16_t *irSampleBuffer)
 {
 	uint8_t status = H2BR1_OK;
@@ -926,8 +941,14 @@ Module_Status SPO2_Sample(uint8_t *SPO2)
 }
 
 /*-----------------------------------------------------------*/
-
-
+/*
+ * @brief: send a sample on the required port or send it to another module and graduate the value on the required port.
+ * @brief: if the topology file is not activated, therefore The module number is 0
+ * @param1: destination module.
+ * @param2: port number.
+ * @param3: hr or spo2 sensor.
+ * @retval: status
+ */
 Module_Status SampletoPort(uint8_t module,uint8_t port, Sensor Sensor)
 {
 	uint8_t HRValue = 0 ;
@@ -940,7 +961,10 @@ Module_Status SampletoPort(uint8_t module,uint8_t port, Sensor Sensor)
 	switch (Sensor)
 	{
 	case HR:
+		while(HRValue==0){
 		status = HR_Sample(&HRValue);
+		}
+
 		if (module == myID)
 		{
 			writePxITMutex(port,(char* )&HRValue,sizeof(uint8_t),10);
@@ -953,7 +977,9 @@ Module_Status SampletoPort(uint8_t module,uint8_t port, Sensor Sensor)
 		}
 		break;
 	case SPO2:
+		while(SPO2Value==0){
 		status = SPO2_Sample(&SPO2Value);
+		}
 		if (module == myID)
 		{
 			writePxITMutex(port,(char* )&SPO2Value,sizeof(uint8_t),10);
@@ -973,7 +999,17 @@ Module_Status SampletoPort(uint8_t module,uint8_t port, Sensor Sensor)
 	}
 	return status;
 }
-
+/*-----------------------------------------------------------*/
+/*
+ * @brief: send a Stream  on the required port or send it to another module and graduate the value on the required port.
+ * @brief: if the topology file is not activated, therefore The module number is 0
+ * @param1: destination module.
+ * @param2: port number.
+ * @param3: hr or spo2 sensor.
+ * @param4: number of samples to be send.
+ * @param5: timeout (Note: the time required to send a single sample is 6000 milliseconds).
+ * @retval: status
+ */
 Module_Status StreamtoPort(uint8_t module,uint8_t port,Sensor Sensor,uint32_t Numofsamples,uint32_t timeout)
 {
 	uint8_t status =H2BR1_OK;
