@@ -879,7 +879,7 @@ Module_Status SPO2_ReadBuffer(uint16_t *redSampleBuffer, uint16_t *irSampleBuffe
 /*-----------------------------------------------------------*/
 /*
  * @brief: Sample Read Flag for IC MAX30100
- * @param1:
+ * @param1: pointer to a buffer to store value it always gives 1
  * @retval: status
  */
 Module_Status SampleReadFlag(uint8_t *sampleReadFlag)
@@ -904,7 +904,7 @@ Module_Status ResetSampleReadFlag()
 /*-----------------------------------------------------------*/
 /*
  * @brief: read the presence of a finger on or near the sensor.
- * @param1: pointer to a buffer to store value it always gives 1
+ * @param1: pointer to a buffer to store value.
  * @retval: status
  */
 Module_Status FingerState(FINGER_STATE *fingerState)
@@ -942,7 +942,8 @@ Module_Status SPO2_Sample(uint8_t *SPO2)
 
 /*-----------------------------------------------------------*/
 /*
- * @brief: send a sample on the required port or send it to another module and graduate the value on the required port.
+ * @brief: send a sample on the required port or send it to another module and
+ * graduate the value on the required port.
  * @brief: if the topology file is not activated, therefore The module number is 0
  * @param1: destination module.
  * @param2: port number.
@@ -1001,7 +1002,8 @@ Module_Status SampletoPort(uint8_t module,uint8_t port, Sensor Sensor)
 }
 /*-----------------------------------------------------------*/
 /*
- * @brief: send a Stream  on the required port or send it to another module and graduate the value on the required port.
+ * @brief: send a Stream  on the required port or send it to another module and graduate
+ * the value on the required port.
  * @brief: if the topology file is not activated, therefore The module number is 0
  * @param1: destination module.
  * @param2: port number.
