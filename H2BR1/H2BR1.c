@@ -68,7 +68,7 @@ portBASE_TYPE CLI_SPO2_SampleCommand( int8_t *pcWriteBuffer, size_t xWriteBuffer
 portBASE_TYPE CLI_FingerStateCommand( int8_t *pcWriteBuffer, size_t xWriteBufferLen, const int8_t *pcCommandString );
 
 /*-----------------------------------------------------------*/
-/* CLI command structure : ReadCellVoltage */
+/* CLI command structure : HR_Sample */
 const CLI_Command_Definition_t CLI_HR_SampleCommandDefinition =
 {
 	( const int8_t * ) "hrsample", /* The command string to type. */
@@ -77,7 +77,7 @@ const CLI_Command_Definition_t CLI_HR_SampleCommandDefinition =
 	0 /* zero parameters are expected. */
 };
 /*-----------------------------------------------------------*/
-/* CLI command structure : ReadCellCurrent */
+/* CLI command structure : SPO2_Sample */
 const CLI_Command_Definition_t CLI_SPO2_SampleCommandDefinition =
 {
 	( const int8_t * ) "spo2sample", /* The command string to type. */
@@ -86,7 +86,7 @@ const CLI_Command_Definition_t CLI_SPO2_SampleCommandDefinition =
 	0 /* zero parameters are expected. */
 };
 /*-----------------------------------------------------------*/
-/* CLI command structure : ReadCellPower */
+/* CLI command structure : FingerState */
 const CLI_Command_Definition_t CLI_FingerStateCommandDefinition =
 {
 	( const int8_t * ) "fingerstate", /* The command string to type. */
