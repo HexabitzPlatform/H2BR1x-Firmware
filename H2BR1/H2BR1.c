@@ -399,13 +399,33 @@ void Module_Peripheral_Init(void){
  */
 Module_Status Module_MessagingTask(uint16_t code,uint8_t port,uint8_t src,uint8_t dst,uint8_t shift){
 	Module_Status result =H2BR1_OK;
-
+	 uint8_t fingerState =0;
+	 uint8_t module=0;
 
 	switch(code){
-
+	case CODE_H2BR1_HR_Sample:
+			{
+				SampletoPort(cMessage[port-1][shift],cMessage[port-1][1+shift],HR);
+				break;
+			}
+		case CODE_H2BR1_SPO2_Sample:
+			{
+				SampletoPort(cMessage[port-1][shift],cMessage[port-1][1+shift],SPO2);
+				break;
+			}
+		case CODE_H2BR1_FingerState:
+			{
+				module = cMessage[port-1][shift];
+				port = cMessage[port-1][1+shift];
+				FingerState(&fingerState);
+				messageParams[0] =port;
+				messageParams[1] =(uint8_t)fingerState;
+				SendMessageToModule(module,CODE_PORT_FORWARD,2);
+				break;
+			}
 		default:
-			result =H2BR1_ERR_UnknownMessage;
-			break;
+			    result =H2BR1_ERR_UnknownMessage;
+			    break;
 	}
 	
 	return result;
