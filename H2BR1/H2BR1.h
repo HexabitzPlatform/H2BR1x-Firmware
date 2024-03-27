@@ -109,8 +109,8 @@
 /* EXG Module_Status Type Definition */
 typedef enum {
 	H2BR1_OK =0,
-	H2BR1_ERR_UnknownMessage,
-	H2BR1_ERR_WrongParams,
+	H2BR1_ERR_UNKNOWNMESSAGE,
+	H2BR1_ERR_WRONGPARAMS,
 	H2BR1_ERROR =255
 } Module_Status;
 

@@ -424,7 +424,7 @@ Module_Status Module_MessagingTask(uint16_t code,uint8_t port,uint8_t src,uint8_
 				break;
 			}
 		default:
-			    result =H2BR1_ERR_UnknownMessage;
+			    result =H2BR1_ERR_UNKNOWNMESSAGE;
 			    break;
 	}
 	
@@ -814,7 +814,7 @@ Module_Status Init_MAX30100(void)
 		if (MAX30100_Read(MAX30100_INTERRUPT_ADDR, &interruptReg, 1, 100) == H2BR1_OK) // InterruptReg should be read firstly so that interrupt pin goes 'high'. When max30100 is booted interrupt pin is 'low'
 			status = H2BR1_OK;
 	    else
-		    status = H2BR1_ERR_WrongParams;
+		    status = H2BR1_ERR_WRONGPARAMS;
 	return status;
 }
 
@@ -831,7 +831,7 @@ Module_Status PlotToTerminal(uint8_t port, MAX30100_MODE mode)
 	uint8_t status = H2BR1_OK;
 	char sendData[20];
 	if(port == 0)
-	return H2BR1_ERR_WrongParams;
+	return H2BR1_ERR_WRONGPARAMS;
 
 	if(mode == HR_MODE)
 	{
@@ -858,7 +858,7 @@ Module_Status PlotToTerminal(uint8_t port, MAX30100_MODE mode)
 		}
 	}
 	else
-		status = H2BR1_ERR_WrongParams;
+		status = H2BR1_ERR_WRONGPARAMS;
 	return status;
 }
 
@@ -977,7 +977,7 @@ Module_Status SampletoPort(uint8_t module,uint8_t port, Sensor Sensor)
 	uint8_t status =H2BR1_OK;
 
 	if(port == 0)
-	return H2BR1_ERR_WrongParams;
+	return H2BR1_ERR_WRONGPARAMS;
 
 	switch (Sensor)
 	{
@@ -1011,7 +1011,7 @@ Module_Status SampletoPort(uint8_t module,uint8_t port, Sensor Sensor)
 		break;
 
 	default:
-			status=H2BR1_ERR_WrongParams;
+			status=H2BR1_ERR_WRONGPARAMS;
 	    break;
 
 	}
@@ -1037,7 +1037,7 @@ Module_Status StreamtoPort(uint8_t module,uint8_t port,Sensor Sensor,uint32_t Nu
 	period=timeout/Numofsamples;
 
 	if (timeout < MIN_PERIOD_MS || period < MIN_PERIOD_MS)
-		return H2BR1_ERR_WrongParams;
+		return H2BR1_ERR_WRONGPARAMS;
 
 	while(samples < Numofsamples)
 	{
