@@ -962,9 +962,7 @@ Module_Status SampletoPort(uint8_t module,uint8_t port, Sensor Sensor)
 	switch (Sensor)
 	{
 	case HR:
-		while(HRValue==0){
 		status = HR_Sample(&HRValue);
-		}
 
 		if (module == myID)
 		{
@@ -978,9 +976,8 @@ Module_Status SampletoPort(uint8_t module,uint8_t port, Sensor Sensor)
 		}
 		break;
 	case SPO2:
-		while(SPO2Value==0){
 		status = SPO2_Sample(&SPO2Value);
-		}
+
 		if (module == myID)
 		{
 			writePxITMutex(port,(char* )&SPO2Value,sizeof(uint8_t),10);
