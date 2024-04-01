@@ -1,5 +1,5 @@
 /*
- BitzOS (BOS) V0.3.1 - Copyright (C) 2017-2024 Hexabitz
+ BitzOS (BOS) V0.3.2 - Copyright (C) 2017-2024 Hexabitz
  All rights reserved
  
  File Name     : H2BR1.h
@@ -25,6 +25,7 @@
 #include "H2BR1_dma.h"
 #include "H2BR1_inputs.h"
 #include "H2BR1_eeprom.h"
+#include "MAX30100_reg_address.h"
 /* Exported definitions -------------------------------------------------------*/
 
 #define	modulePN		_H2BR1
@@ -41,13 +42,12 @@
 #define _P3 
 #define _P4 
 #define _P5 
-#define _P6
+
 
 /* Define available USARTs */
 #define _Usart1 1
 #define _Usart2 1
 #define _Usart3 1
-#define _Usart4 0
 #define _Usart5 1
 #define _Usart6	1
 
@@ -58,7 +58,7 @@
 #define P3uart &huart3
 #define P4uart &huart1
 #define P5uart &huart5
-#define P6uart &huart6
+
 
 
 /* Port Definitions */
@@ -80,12 +80,6 @@
 #define	USART3_RX_PORT		GPIOB
 #define	USART3_AF			GPIO_AF4_USART3
 
-#define	USART4_TX_PIN		GPIO_PIN_0
-#define	USART4_RX_PIN		GPIO_PIN_1
-#define	USART4_TX_PORT		GPIOA
-#define	USART4_RX_PORT		GPIOA
-#define	USART4_AF			GPIO_AF4_USART4
-
 #define	USART5_TX_PIN		GPIO_PIN_3
 #define	USART5_RX_PIN		GPIO_PIN_2
 #define	USART5_TX_PORT		GPIOD
@@ -102,26 +96,10 @@
 /* Module-specific Definitions */
 
 /* Indicator LED */
-#define _IND_LED_PORT			GPIOB
-#define _IND_LED_PIN			GPIO_PIN_7
+#define _IND_LED_PORT			GPIOA
+#define _IND_LED_PIN			GPIO_PIN_5
 
 #define NUM_MODULE_PARAMS		1
-
-/* EXG Module GPIO Pinout */
-#define SDN_EXG_Pin             GPIO_PIN_6
-#define SDN_EXG_GPIO_Port       GPIOA
-#define LODP_EXG_Pin            GPIO_PIN_7
-#define LODP_EXG_GPIO_Port      GPIOA
-#define LODN_EXG_Pin            GPIO_PIN_0
-#define LODN_EXG_GPIO_Port      GPIOB
-
-/* H2BR1 Module Special Timer */
-
-
-/* H2BR1 Module Special ADC */
-
-
-/* H2BR1 Module special parameters */
 
 
 /* Module EEPROM Variables */
@@ -131,17 +109,25 @@
 /* EXG Module_Status Type Definition */
 typedef enum {
 	H2BR1_OK =0,
-	H2BR1_ERR_UnknownMessage,
-	H2BR1_ERR_WrongParams,
+	H2BR1_ERR_UNKNOWNMESSAGE,
+	H2BR1_ERR_WRONGPARAMS,
 	H2BR1_ERROR =255
 } Module_Status;
 
+extern I2C_HandleTypeDef hi2c2;
+
+typedef enum
+{
+	HR = 0,
+	SPO2 ,
+} Sensor;
+
+extern  MAX30100_s MaxStruct;
 
 /* Export UART variables */
 extern UART_HandleTypeDef huart1;
 extern UART_HandleTypeDef huart2;
 extern UART_HandleTypeDef huart3;
-extern UART_HandleTypeDef huart4;
 extern UART_HandleTypeDef huart5;
 extern UART_HandleTypeDef huart6;
 
@@ -149,7 +135,6 @@ extern UART_HandleTypeDef huart6;
 extern void MX_USART1_UART_Init(void);
 extern void MX_USART2_UART_Init(void);
 extern void MX_USART3_UART_Init(void);
-extern void MX_USART4_UART_Init(void);
 extern void MX_USART5_UART_Init(void);
 extern void MX_USART6_UART_Init(void);
 extern void SystemClock_Config(void);
@@ -163,12 +148,23 @@ extern void ExecuteMonitor(void);
 void SetupPortForRemoteBootloaderUpdate(uint8_t port);
 void remoteBootloaderUpdate(uint8_t src,uint8_t dst,uint8_t inport,uint8_t outport);
 
-
+Module_Status HR_Sample(uint8_t *heartRate);
+Module_Status SPO2_Sample(uint8_t *SPO2);
+Module_Status FingerState(FINGER_STATE *fingerState);
+Module_Status PlotToTerminal(uint8_t port, MAX30100_MODE mode);
+Module_Status HR_ReadBuffer(uint16_t *irSampleBuffer);
+Module_Status SPO2_ReadBuffer(uint16_t *redSampleBuffer, uint16_t *irSampleBuffer);
+Module_Status SampleReadFlag(uint8_t *sampleReadFlag);
+Module_Status ResetSampleReadFlag();
+Module_Status SampletoPort(uint8_t module,uint8_t port, Sensor Sensor);
+Module_Status StreamtoPort(uint8_t module,uint8_t port,Sensor Sensor,uint32_t Numofsamples,uint32_t timeout);
 /* -----------------------------------------------------------------------
  |								Commands							      ||
 /* -----------------------------------------------------------------------
  */
-
+extern const CLI_Command_Definition_t CLI_HR_SampleCommandDefinition;
+extern const CLI_Command_Definition_t CLI_SPO2_SampleCommandDefinition;
+extern const CLI_Command_Definition_t CLI_FingerStateCommandDefinition;
 
 #endif /* H2BR1_H */
 

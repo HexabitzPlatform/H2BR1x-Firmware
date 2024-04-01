@@ -1,5 +1,5 @@
 /*
- BitzOS (BOS) V0.3.1 - Copyright (C) 2017-2024 Hexabitz
+ BitzOS (BOS) V0.3.2 - Copyright (C) 2017-2024 Hexabitz
  All rights reserved
 
  File Name     : H2BR1_timers.c
@@ -23,7 +23,7 @@
 GPIO_InitTypeDef GPIO_InitStruct = {0};
 TIM_HandleTypeDef htim16; /* micro-second delay counter */
 TIM_HandleTypeDef htim17; /* milli-second delay counter */
-extern TIM_HandleTypeDef htim2;  /* EXG special timer */
+
 
 void MX_TIM2_Init(void); /* EXG special timer */
 
@@ -73,52 +73,7 @@ void TIM_MSEC_Init(void){
 }
 
 /*-----------------------------------------------------------*/
-/* EXG special timer */
-void MX_TIM2_Init(void)
-{
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
 
-  htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 48-1;
-  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 2000;
-  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
-  HAL_TIM_Base_Init(&htim2);
-
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig);
-
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig);
-
-
-  /* TIM2 clock enable */
-  __HAL_RCC_TIM2_CLK_ENABLE();
-
-  /* TIM2 interrupt Init */
-  HAL_NVIC_SetPriority(TIM2_IRQn, 1, 0);
-  HAL_NVIC_EnableIRQ(TIM2_IRQn);
-
-
-}
-
-//void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* tim_baseHandle)
-//{
-//
-//  if(tim_baseHandle->Instance==TIM2)
-//  {
-//    /* TIM2 clock enable */
-//    __HAL_RCC_TIM2_CLK_ENABLE();
-//
-//    /* TIM2 interrupt Init */
-//    HAL_NVIC_SetPriority(TIM2_IRQn, 1, 0);
-//    HAL_NVIC_EnableIRQ(TIM2_IRQn);
-//
-//  }
-//}
 
 void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef* tim_baseHandle)
 {

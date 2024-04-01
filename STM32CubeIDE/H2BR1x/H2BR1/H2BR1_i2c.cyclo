@@ -1,0 +1,5 @@
+..\..\H2BR1\H2BR1_i2c.c:20:6:MX_I2C2_Init	1
+..\..\H2BR1\H2BR1_i2c.c:44:6:HAL_I2C_MspInit	2
+..\..\H2BR1\H2BR1_i2c.c:74:6:HAL_I2C_MspDeInit	2
+..\..\H2BR1\H2BR1_i2c.c:103:15:MAX30100_Write	1
+..\..\H2BR1\H2BR1_i2c.c:115:15:MAX30100_Read	1
