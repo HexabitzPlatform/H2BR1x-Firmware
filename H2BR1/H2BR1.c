@@ -39,10 +39,10 @@ module_param_t modParam[NUM_MODULE_PARAMS] ={{.paramPtr = NULL, .paramFormat =FM
 /* Private variables ---------------------------------------------------------*/
 
 MAX30100_s MaxStruct;
-
+TaskHandle_t EXGTaskHandle = NULL;
 /* Private function prototypes -----------------------------------------------*/
 Module_Status Init_MAX30100(void);
-
+void EXGTask(void *argument);
 void MAX30100_Reset();
 void MAX30100_Enable_Interrupt(INTERRUPT_EN_A_FULL_BIT aFull, INTERRUPT_EN_TEMP_RDY_BIT tempRdy, INTERRUPT_EN_HR_RDY_BIT hrRdy, INTERRUPT_EN_SPO2_RDY_BIT Spo2Rdy);
 void MAX30100_Set_Mode(MAX30100_MODE mode);
@@ -389,8 +389,8 @@ void Module_Peripheral_Init(void){
 	}
 
 	/* Create module special task (if needed) */
-//	if(EXGTaskHandle == NULL)
-//		xTaskCreate(EXGTask,(const char* ) "EXGTask",configMINIMAL_STACK_SIZE,NULL,osPriorityNormal - osPriorityIdle,&EXGTaskHandle);
+	if(EXGTaskHandle == NULL)
+		xTaskCreate(EXGTask,(const char* ) "EXGTask",configMINIMAL_STACK_SIZE,NULL,osPriorityNormal - osPriorityIdle,&EXGTaskHandle);
 
 }
 
@@ -461,27 +461,27 @@ void RegisterModuleCLICommands(void){
 /*-----------------------------------------------------------*/
 
 ///* Module special task function (if needed) */
-//void EXGTask(void *argument) {
-//
-//	uint8_t cases; // Test variable.
-//
-//	/* Infinite loop */
-//	for (;;) {
-//		/*  */
-//
-//		switch (cases) {
-//
-//
-//
-//	default:
-//		osDelay(10);
-//		break;
-//		}
-//
-//		taskYIELD();
-//	}
-//
-//}
+void EXGTask(void *argument) {
+
+	uint8_t cases; // Test variable.
+
+	/* Infinite loop */
+	for (;;) {
+		/*  */
+
+		switch (cases) {
+
+
+
+	default:
+		osDelay(10);
+		break;
+		}
+
+		taskYIELD();
+	}
+
+}
 
 
 /*-----------------------------------------------------------*/
