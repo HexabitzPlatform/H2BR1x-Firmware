@@ -28,7 +28,7 @@ UART_HandleTypeDef huart6;
 /* Exported variables */
 extern FLASH_ProcessTypeDef pFlash;
 extern uint8_t numOfRecordedSnippets;
-
+typedef void (*SampleMemsToString)(char *, size_t);
 /* Exported functions */
 
 //uint32_t lastTick;
@@ -36,11 +36,22 @@ extern uint8_t numOfRecordedSnippets;
 /* Module exported parameters ------------------------------------------------*/
 module_param_t modParam[NUM_MODULE_PARAMS] ={{.paramPtr = NULL, .paramFormat =FMT_FLOAT, .paramName =""}};
 #define MIN_PERIOD_MS				100
-/* Private variables ---------------------------------------------------------*/
+static bool StreamCommandParser(const int8_t *pcCommandString, const char **ppSensName, portBASE_TYPE *pSensNameLen,
+														bool *pPortOrCLI, uint32_t *pPeriod, uint32_t *pTimeout, uint8_t *pPort, uint8_t *pModule);
 
+/* Private variables ---------------------------------------------------------*/
+static bool stopStream = false;
 MAX30100_s MaxStruct;
 TaskHandle_t EXGTaskHandle = NULL;
+uint8_t port1, module1,mode1;
+uint8_t port2 ,module2,mode2;
+uint32_t Numofsamples1 ,timeout1;
+uint32_t Numofsamples2 ,timeout2;
+uint8_t flag ;
+uint8_t tofMode ;
 /* Private function prototypes -----------------------------------------------*/
+Module_Status ExportStreanToTerminal (uint8_t port,Sensor Sensor,uint32_t Numofsamples,uint32_t timeout);
+Module_Status ExportStreanToPort (uint8_t module,uint8_t port,Sensor Sensor,uint32_t Numofsamples,uint32_t timeout);
 Module_Status Init_MAX30100(void);
 void EXGTask(void *argument);
 void MAX30100_Reset();
@@ -56,7 +67,8 @@ void Oxymeter_Modify_Led_Current_Bias();
 void Oxymeter_Add_Samples_To_Buffers();
 void Oxymeter_Detect_Finger();
 void Oxymeter_Signal_Processing();
-
+void SampleHRToString(char *cstring, size_t maxLen);
+void SampleSPO2ToString(char *cstring, size_t maxLen);
 //These two functions should be put in external interrupt service routine
 void Read_Data_When_Interrupt();
 void Oxymeter_Calculating_HR_SPO2();
@@ -66,6 +78,7 @@ void Oxymeter_Calculating_HR_SPO2();
 portBASE_TYPE CLI_HR_SampleCommand( int8_t *pcWriteBuffer, size_t xWriteBufferLen, const int8_t *pcCommandString );
 portBASE_TYPE CLI_SPO2_SampleCommand( int8_t *pcWriteBuffer, size_t xWriteBufferLen, const int8_t *pcCommandString );
 portBASE_TYPE CLI_FingerStateCommand( int8_t *pcWriteBuffer, size_t xWriteBufferLen, const int8_t *pcCommandString );
+portBASE_TYPE StreamEXGCommand( int8_t *pcWriteBuffer, size_t xWriteBufferLen, const int8_t *pcCommandString );
 
 /*-----------------------------------------------------------*/
 /* CLI command structure : HR_Sample */
@@ -84,6 +97,13 @@ const CLI_Command_Definition_t CLI_SPO2_SampleCommandDefinition =
 	( const int8_t * ) "spo2sample:\r\nTake one sample measurement to measure oxygenation rate after 6 seconds from placing the hand on the sensor.\r\n\r\n",
 	CLI_SPO2_SampleCommand, /* The function to run. */
 	0 /* zero parameters are expected. */
+};
+/*-----------------------------------------------------------*/
+const CLI_Command_Definition_t StreamCommandDefinition = {
+	(const int8_t *) "stream",
+	(const int8_t *) "stream:\r\n Syntax: stream [EMG]/[EEG]/[EOG]/[ECG] (Numofsamples ) (time in ms) [port] [module].\r\n\r\n",
+	StreamEXGCommand,
+	-1
 };
 /*-----------------------------------------------------------*/
 /* CLI command structure : FingerState */
@@ -453,6 +473,7 @@ uint8_t GetPort(UART_HandleTypeDef *huart){
 /* --- Register this module CLI Commands
  */
 void RegisterModuleCLICommands(void){
+	FreeRTOS_CLIRegisterCommand(&StreamCommandDefinition);
 	FreeRTOS_CLIRegisterCommand(&CLI_HR_SampleCommandDefinition);
 	FreeRTOS_CLIRegisterCommand(&CLI_SPO2_SampleCommandDefinition);
 	FreeRTOS_CLIRegisterCommand(&CLI_FingerStateCommandDefinition);
@@ -469,13 +490,18 @@ void EXGTask(void *argument) {
 	for (;;) {
 		/*  */
 
-		switch (cases) {
 
+		switch(tofMode){
+		case STREAM_TO_PORT :
+			ExportStreanToPort(module2, port2, mode2, Numofsamples2, timeout2);
+			break;
+		case STREAM_TO_Terminal :
+			ExportStreanToTerminal( port1, mode1, Numofsamples1, timeout1);
+			break;
 
-
-	default:
-		osDelay(10);
-		break;
+			default:
+				osDelay(10);
+				break;
 		}
 
 		taskYIELD();
@@ -983,7 +1009,6 @@ Module_Status SampletoPort(uint8_t module,uint8_t port, Sensor Sensor)
 	{
 	case HR:
 		status = HR_Sample(&HRValue);
-
 		if (module == myID)
 		{
 			writePxITMutex(port,(char* )&HRValue,sizeof(uint8_t),10);
@@ -1029,9 +1054,44 @@ Module_Status SampletoPort(uint8_t module,uint8_t port, Sensor Sensor)
  * @param5: timeout (Note: the time required to send a single sample is 6000 milliseconds).
  * @retval: status
  */
+//Module_Status StreamtoPort(uint8_t module,uint8_t port,Sensor Sensor,uint32_t Numofsamples,uint32_t timeout)
+//{
+//	uint8_t status =H2BR1_OK;
+//	uint32_t samples=0;
+//	uint32_t period=0;
+//	period=timeout/Numofsamples;
+//
+//	if (timeout < MIN_PERIOD_MS || period < MIN_PERIOD_MS)
+//		return H2BR1_ERR_WRONGPARAMS;
+//
+//	while(samples < Numofsamples)
+//	{
+//	status=SampletoPort(module,port,Sensor);
+//	vTaskDelay(pdMS_TO_TICKS(period));
+//	samples++;
+//	}
+//	samples=0;
+//	return status;
+//
+//}
+
+
 Module_Status StreamtoPort(uint8_t module,uint8_t port,Sensor Sensor,uint32_t Numofsamples,uint32_t timeout)
 {
-	uint8_t status =H2BR1_OK;
+	Module_Status status =H2BR1_OK;
+	tofMode = STREAM_TO_PORT;
+	port2 = port;
+	module2 = module;
+	Numofsamples2 = Numofsamples;
+	timeout2 = timeout;
+	mode2 = Sensor;
+	return status;
+
+}
+/*-----------------------------------------------------------*/
+Module_Status ExportStreanToPort (uint8_t module,uint8_t port,Sensor Sensor,uint32_t Numofsamples,uint32_t timeout)
+{
+	Module_Status status =H2BR1_OK;
 	uint32_t samples=0;
 	uint32_t period=0;
 	period=timeout/Numofsamples;
@@ -1045,8 +1105,144 @@ Module_Status StreamtoPort(uint8_t module,uint8_t port,Sensor Sensor,uint32_t Nu
 	vTaskDelay(pdMS_TO_TICKS(period));
 	samples++;
 	}
+	tofMode=20;
 	samples=0;
 	return status;
+
+}
+/*-----------------------------------------------------------*/
+Module_Status StreamToTerminal(uint8_t port,Sensor Sensor,uint32_t Numofsamples,uint32_t timeout)
+{
+	Module_Status status =H2BR1_OK;
+	tofMode = STREAM_TO_Terminal;
+	port1 = port;
+	Numofsamples1 = Numofsamples;
+	timeout1 = timeout;
+	mode1 = Sensor;
+	return status;
+
+}
+
+/*-----------------------------------------------------------*/
+Module_Status ExportStreanToTerminal (uint8_t port,Sensor Sensor,uint32_t Numofsamples,uint32_t timeout)
+ {
+	Module_Status status = H2BR1_OK;
+	uint32_t samples = 0;
+	uint32_t period = 0;
+	MAX30100_MODE mode;
+	period = timeout / Numofsamples;
+
+	if (timeout < MIN_PERIOD_MS || period < MIN_PERIOD_MS)
+		return H2BR1_ERR_WRONGPARAMS;
+	if (HR == Sensor) {
+		mode = HR_MODE;
+	} else if (SPO2 == Sensor) {
+		mode = SPO2_MODE;
+	}
+	while (samples < Numofsamples) {
+		status = PlotToTerminal(port, mode);
+		vTaskDelay(pdMS_TO_TICKS(period));
+		samples++;
+	}
+	tofMode = 20;
+	samples = 0;
+	return status;
+
+}
+/*-----------------------------------------------------------*/
+static Module_Status PollingSleepCLISafe(uint32_t period, long Numofsamples)
+{
+	const unsigned DELTA_SLEEP_MS = 100; // milliseconds
+	long numDeltaDelay =  period / DELTA_SLEEP_MS;
+	unsigned lastDelayMS = period % DELTA_SLEEP_MS;
+
+	while (numDeltaDelay-- > 0) {
+		vTaskDelay(pdMS_TO_TICKS(DELTA_SLEEP_MS));
+
+		// Look for ENTER key to stop the stream
+		for (uint8_t chr=1 ; chr<MSG_RX_BUF_SIZE ; chr++)
+		{
+			if (UARTRxBuf[PcPort-1][chr] == '\r') {
+				UARTRxBuf[PcPort-1][chr] = 0;
+				flag=1;
+				return H2BR1_ERR_TERMINATED;
+			}
+		}
+
+		if (stopStream)
+			return H2BR1_ERR_TERMINATED;
+	}
+
+	vTaskDelay(pdMS_TO_TICKS(lastDelayMS));
+	return H2BR1_OK;
+}
+/*-----------------------------------------------------------*/
+static Module_Status StreamMemsToCLI(uint32_t Numofsamples, uint32_t timeout, SampleMemsToString function)
+{
+	Module_Status status = H2BR1_OK;
+	int8_t *pcOutputString = NULL;
+	uint32_t period = timeout / Numofsamples;
+	if (period < MIN_MEMS_PERIOD_MS)
+		return H2BR1_ERR_WrongParams;
+
+	// TODO: Check if CLI is enable or not
+	for (uint8_t chr = 0; chr < MSG_RX_BUF_SIZE; chr++) {
+			if (UARTRxBuf[PcPort - 1][chr] == '\r' ) {
+				UARTRxBuf[PcPort - 1][chr] = 0;
+			}
+		}
+	if (1 == flag) {
+		flag = 0;
+		static char *pcOKMessage = (int8_t*) "Stop stream !\n\r";
+		writePxITMutex(PcPort, pcOKMessage, strlen(pcOKMessage), 10);
+		return status;
+	}
+	if (period > timeout)
+		timeout = period;
+
+	long numTimes = timeout / period;
+	stopStream = false;
+
+	while ((numTimes-- > 0) || (timeout >= MAX_MEMS_TIMEOUT_MS)) {
+		pcOutputString = FreeRTOS_CLIGetOutputBuffer();
+		function((char *)pcOutputString, 100);
+
+
+		writePxMutex(PcPort, (char *)pcOutputString, strlen((char *)pcOutputString), cmd500ms, HAL_MAX_DELAY);
+		if (PollingSleepCLISafe(period,Numofsamples) != H2BR1_OK)
+			break;
+	}
+
+	memset((char *) pcOutputString, 0, configCOMMAND_INT_MAX_OUTPUT_SIZE);
+  sprintf((char *)pcOutputString, "\r\n");
+	return status;
+}
+
+void SampleHRToString(char *cstring, size_t maxLen) {
+	uint8_t heartRate;
+	HR_Sample(&heartRate);
+	snprintf(cstring, maxLen, "HeartRate: %d \r\n", heartRate);
+}
+/*-----------------------------------------------------------*/
+void SampleSPO2ToString(char *cstring, size_t maxLen) {
+	uint8_t SPO2;
+	SPO2_Sample(&SPO2);
+	snprintf(cstring, maxLen, "SPO2: %d \r\n", SPO2);
+}
+/*-----------------------------------------------------------*/
+Module_Status StreamToCLI(uint32_t Numofsamples, uint32_t timeout,
+		Sensor Sensor) {
+
+	switch (Sensor) {
+	case HR:
+		StreamMemsToCLI(Numofsamples, timeout, SampleHRToString);
+		break;
+	case SPO2:
+		StreamMemsToCLI(Numofsamples, timeout, SampleSPO2ToString);
+		break;
+	default:
+		break;
+	}
 
 }
 
@@ -1054,6 +1250,108 @@ Module_Status StreamtoPort(uint8_t module,uint8_t port,Sensor Sensor,uint32_t Nu
  |								Commands							      |
    -----------------------------------------------------------------------
  */
+portBASE_TYPE StreamEXGCommand(int8_t *pcWriteBuffer, size_t xWriteBufferLen, const int8_t *pcCommandString)
+{
+	const char *const HRCmdName = "hr";
+	const char *const SPO2CmdName = "spo2";
+
+
+	uint32_t Numofsamples = 0;
+	uint32_t timeout = 0;
+	uint8_t port = 0;
+	uint8_t module = 0;
+
+	bool portOrCLI = true; // Port Mode => false and CLI Mode => true
+
+	const char *pSensName = NULL;
+	portBASE_TYPE sensNameLen = 0;
+
+	// Make sure we return something
+	*pcWriteBuffer = '\0';
+
+	if (!StreamCommandParser(pcCommandString, &pSensName, &sensNameLen, &portOrCLI, &Numofsamples, &timeout, &port, &module)) {
+		snprintf((char *)pcWriteBuffer, xWriteBufferLen, "Invalid Arguments\r\n");
+		return pdFALSE;
+	}
+
+	do {
+		if (!strncmp(pSensName, HRCmdName, strlen(HRCmdName))) {
+			if (portOrCLI) {
+
+				StreamToCLI(Numofsamples, timeout,HR);
+
+			} else {
+
+				ExportStreanToPort(module, port, HR, Numofsamples, timeout);
+
+			}
+
+		} else if (!strncmp(pSensName, SPO2CmdName, strlen(SPO2CmdName))) {
+			if (portOrCLI) {
+				StreamToCLI(Numofsamples, timeout, SPO2);
+
+			} else {
+
+				ExportStreanToPort(module, port, SPO2, Numofsamples, timeout);
+			}
+
+
+
+		} else {
+			snprintf((char*) pcWriteBuffer, xWriteBufferLen,
+					"Invalid Arguments\r\n");
+		}
+
+		snprintf((char*) pcWriteBuffer, xWriteBufferLen, "\r\n");
+		return pdFALSE;
+	} while (0);
+
+	snprintf((char *)pcWriteBuffer, xWriteBufferLen, "Error reading Sensor\r\n");
+	return pdFALSE;
+}
+
+static bool StreamCommandParser(const int8_t *pcCommandString, const char **ppSensName, portBASE_TYPE *pSensNameLen,
+														bool *pPortOrCLI, uint32_t *pPeriod, uint32_t *pTimeout, uint8_t *pPort, uint8_t *pModule)
+{
+	const char *pPeriodMSStr = NULL;
+	const char *pTimeoutMSStr = NULL;
+
+	portBASE_TYPE periodStrLen = 0;
+	portBASE_TYPE timeoutStrLen = 0;
+
+	const char *pPortStr = NULL;
+	const char *pModStr = NULL;
+
+	portBASE_TYPE portStrLen = 0;
+	portBASE_TYPE modStrLen = 0;
+
+	*ppSensName = (const char *)FreeRTOS_CLIGetParameter(pcCommandString, 1, pSensNameLen);
+	pPeriodMSStr = (const char *)FreeRTOS_CLIGetParameter(pcCommandString, 2, &periodStrLen);
+	pTimeoutMSStr = (const char *)FreeRTOS_CLIGetParameter(pcCommandString, 3, &timeoutStrLen);
+
+	// At least 3 Parameters are required!
+	if ((*ppSensName == NULL) || (pPeriodMSStr == NULL) || (pTimeoutMSStr == NULL))
+		return false;
+
+	// TODO: Check if Period and Timeout are integers or not!
+	*pPeriod = atoi(pPeriodMSStr);
+	*pTimeout = atoi(pTimeoutMSStr);
+	*pPortOrCLI = true;
+
+	pPortStr = (const char *)FreeRTOS_CLIGetParameter(pcCommandString, 4, &portStrLen);
+	pModStr = (const char *)FreeRTOS_CLIGetParameter(pcCommandString, 5, &modStrLen);
+
+	if ((pModStr == NULL) && (pPortStr == NULL))
+		return true;
+	if ((pModStr == NULL) || (pPortStr == NULL))	// If user has provided 4 Arguments.
+		return false;
+
+	*pPort = atoi(pPortStr);
+	*pModule = atoi(pModStr);
+	*pPortOrCLI = false;
+
+	return true;
+}
 
 portBASE_TYPE CLI_HR_SampleCommand( int8_t *pcWriteBuffer, size_t xWriteBufferLen, const int8_t *pcCommandString ){
 	Module_Status status = H2BR1_OK;
