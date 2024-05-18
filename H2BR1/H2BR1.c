@@ -1002,9 +1002,9 @@ Module_Status SampletoPort(uint8_t module,uint8_t port, Sensor Sensor)
 	uint8_t SPO2Value = 0;
 	uint8_t status =H2BR1_OK;
 
-	if(port == 0)
-	return H2BR1_ERR_WRONGPARAMS;
-
+	if (port == 0 && module == myID) {
+		return H2BR1_ERR_WrongParams;
+	}
 	switch (Sensor)
 	{
 	case HR:
@@ -1015,9 +1015,9 @@ Module_Status SampletoPort(uint8_t module,uint8_t port, Sensor Sensor)
 		}
 		else
 		{
-			messageParams[0] =port;
+			messageParams[0] =FMT_UINT8;
 			messageParams[1] =(uint8_t)HRValue;
-			SendMessageToModule(module,CODE_PORT_FORWARD,sizeof(uint8_t)+1);
+			SendMessageToModule(module,CODE_READ_RESPONSE,sizeof(uint8_t)+1);
 		}
 		break;
 	case SPO2:
@@ -1029,9 +1029,9 @@ Module_Status SampletoPort(uint8_t module,uint8_t port, Sensor Sensor)
 		}
 		else
 		{
-			messageParams[0] =port;
+			messageParams[0] =FMT_UINT8;
 			messageParams[1] =(uint8_t)SPO2Value;
-			SendMessageToModule(module,CODE_PORT_FORWARD,sizeof(uint8_t)+1);
+			SendMessageToModule(module,CODE_READ_RESPONSE,sizeof(uint8_t)+1);
 		}
 		break;
 
