@@ -1015,9 +1015,13 @@ Module_Status SampletoPort(uint8_t module,uint8_t port, Sensor Sensor)
 		}
 		else
 		{
+			if (H2BR1_OK == status)
+					messageParams[1] = BOS_OK;
+				else
+					messageParams[1] = BOS_ERROR;
 			messageParams[0] =FMT_UINT8;
-			messageParams[1] =(uint8_t)HRValue;
-			SendMessageToModule(module,CODE_READ_RESPONSE,sizeof(uint8_t)+1);
+			messageParams[2] =(uint8_t)HRValue;
+			SendMessageToModule(module,CODE_READ_RESPONSE,sizeof(uint8_t)+2);
 		}
 		break;
 	case SPO2:
@@ -1029,9 +1033,13 @@ Module_Status SampletoPort(uint8_t module,uint8_t port, Sensor Sensor)
 		}
 		else
 		{
+			if (H2BR1_OK == status)
+					messageParams[1] = BOS_OK;
+				else
+					messageParams[1] = BOS_ERROR;
 			messageParams[0] =FMT_UINT8;
-			messageParams[1] =(uint8_t)SPO2Value;
-			SendMessageToModule(module,CODE_READ_RESPONSE,sizeof(uint8_t)+1);
+			messageParams[2] =(uint8_t)SPO2Value;
+			SendMessageToModule(module,CODE_READ_RESPONSE,sizeof(uint8_t)+2);
 		}
 		break;
 
