@@ -1,5 +1,5 @@
 /*
- BitzOS (BOS) V0.3.3 - Copyright (C) 2017-2024 Hexabitz
+ BitzOS (BOS) V0.3.4 - Copyright (C) 2017-2024 Hexabitz
  All rights reserved
  
  File Name     : H2BR1.h
@@ -106,11 +106,19 @@
 // Module Addressing Space 500 - 599
 #define _EE_MODULE							500		
 
+#define MIN_MEMS_PERIOD_MS				100
+#define MAX_MEMS_TIMEOUT_MS				0xFFFFFFFF
+
+#define STREAM_TO_PORT          1
+#define STREAM_TO_Terminal      2
+
 /* EXG Module_Status Type Definition */
 typedef enum {
 	H2BR1_OK =0,
 	H2BR1_ERR_UNKNOWNMESSAGE,
 	H2BR1_ERR_WRONGPARAMS,
+	H2BR1_ERR_TERMINATED,
+	H2BR1_ERR_WrongParams,
 	H2BR1_ERROR =255
 } Module_Status;
 
@@ -158,6 +166,7 @@ Module_Status SampleReadFlag(uint8_t *sampleReadFlag);
 Module_Status ResetSampleReadFlag();
 Module_Status SampletoPort(uint8_t module,uint8_t port, Sensor Sensor);
 Module_Status StreamtoPort(uint8_t module,uint8_t port,Sensor Sensor,uint32_t Numofsamples,uint32_t timeout);
+Module_Status StreamToTerminal(uint8_t port,Sensor Sensor,uint32_t Numofsamples,uint32_t timeout);
 /* -----------------------------------------------------------------------
  |								Commands							      ||
 /* -----------------------------------------------------------------------
