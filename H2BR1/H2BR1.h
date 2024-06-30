@@ -111,7 +111,7 @@
 
 #define STREAM_TO_PORT          1
 #define STREAM_TO_Terminal      2
-
+#define DEFAULT                 4
 /* EXG Module_Status Type Definition */
 typedef enum {
 	H2BR1_OK =0,

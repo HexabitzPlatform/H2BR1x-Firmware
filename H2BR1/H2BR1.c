@@ -1113,7 +1113,7 @@ Module_Status ExportStreanToPort (uint8_t module,uint8_t port,Sensor Sensor,uint
 	vTaskDelay(pdMS_TO_TICKS(period));
 	samples++;
 	}
-	tofMode=20;
+	module1 = DEFAULT;
 	samples=0;
 	return status;
 
@@ -1152,7 +1152,7 @@ Module_Status ExportStreanToTerminal (uint8_t port,Sensor Sensor,uint32_t Numofs
 		vTaskDelay(pdMS_TO_TICKS(period));
 		samples++;
 	}
-	tofMode = 20;
+	module1 = DEFAULT;
 	samples = 0;
 	return status;
 
