@@ -1,5 +1,5 @@
 /*
- BitzOS (BOS) V0.3.4 - Copyright (C) 2017-2024 Hexabitz
+ BitzOS (BOS) V0.3.5 - Copyright (C) 2017-2024 Hexabitz
  All rights reserved
  
  File Name     : H2BR1.h
@@ -111,7 +111,7 @@
 
 #define STREAM_TO_PORT          1
 #define STREAM_TO_Terminal      2
-
+#define DEFAULT                 4
 /* EXG Module_Status Type Definition */
 typedef enum {
 	H2BR1_OK =0,
