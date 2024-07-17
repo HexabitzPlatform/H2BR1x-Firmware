@@ -435,14 +435,20 @@ Module_Status Module_MessagingTask(uint16_t code,uint8_t port,uint8_t src,uint8_
 			}
 		case CODE_H2BR1_FingerState:
 			{
-				module = cMessage[port-1][shift];
-				port = cMessage[port-1][1+shift];
-				FingerState(&fingerState);
-				messageParams[0] =port;
-				messageParams[1] =(uint8_t)fingerState;
-				SendMessageToModule(module,CODE_PORT_FORWARD,2);
-				break;
-			}
+				Module_Status status ;
+		module = cMessage[port - 1][shift];
+		port = cMessage[port - 1][1 + shift];
+		status = FingerState(&fingerState);
+		if (H2BR1_OK == status)
+			messageParams[1] = BOS_OK;
+		else
+			messageParams[1] = BOS_ERROR;
+		messageParams[0] = FMT_UINT8;
+		messageParams[2] = 1;
+		messageParams[3] = (uint8_t) fingerState;
+		SendMessageToModule(module, CODE_READ_RESPONSE, sizeof(uint8_t) + 3);
+		break;
+	}
 		default:
 			    result =H2BR1_ERR_UNKNOWNMESSAGE;
 			    break;
@@ -1020,8 +1026,9 @@ Module_Status SampletoPort(uint8_t module,uint8_t port, Sensor Sensor)
 				else
 					messageParams[1] = BOS_ERROR;
 			messageParams[0] =FMT_UINT8;
-			messageParams[2] =(uint8_t)HRValue;
-			SendMessageToModule(module,CODE_READ_RESPONSE,sizeof(uint8_t)+2);
+			messageParams[2] =1;
+			messageParams[3] =(uint8_t)HRValue;
+			SendMessageToModule(module,CODE_READ_RESPONSE,sizeof(uint8_t)+3);
 		}
 		break;
 	case SPO2:
@@ -1038,8 +1045,9 @@ Module_Status SampletoPort(uint8_t module,uint8_t port, Sensor Sensor)
 				else
 					messageParams[1] = BOS_ERROR;
 			messageParams[0] =FMT_UINT8;
-			messageParams[2] =(uint8_t)SPO2Value;
-			SendMessageToModule(module,CODE_READ_RESPONSE,sizeof(uint8_t)+2);
+			messageParams[2] =1;
+			messageParams[3] =(uint8_t)SPO2Value;
+			SendMessageToModule(module,CODE_READ_RESPONSE,sizeof(uint8_t)+3);
 		}
 		break;
 
