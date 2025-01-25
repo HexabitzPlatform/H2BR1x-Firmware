@@ -80,13 +80,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart,uint16_t Size){
 	PacketLength =Size;
 	count++;
 
-	if (count > 3) {
-//		HAL_Delay(100);
-		count = 0;
-	}
-
-
-	// Notify backend task
+	/* Notify backend task */
 	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 	vTaskNotifyGiveFromISR(BackEndTaskHandle,&xHigherPriorityTaskWoken);
 	portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
@@ -302,7 +296,7 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart){
 		index_process[port - 1] = 0;
 		memset((uint8_t* )&UARTRxBuf[port - 1], 0, MSG_RX_BUF_SIZE);
 //		HAL_UART_Receive_DMA(huart,(uint8_t* )&UARTRxBuf[port - 1] ,MSG_RX_BUF_SIZE);
-		HAL_UART_Receive_DMA(huart,(uint8_t* )&UARTRxBuf[port - 1] ,MSG_RX_BUF_SIZE);
+		HAL_UARTEx_ReceiveToIdle_DMA(huart,(uint8_t* )&UARTRxBuf[port - 1] ,MSG_RX_BUF_SIZE);
 		MsgDMAStopped[port - 1] = true;		// Set a flag here and let the backend task restart DMA after parsing the buffer	
 	}
 }
