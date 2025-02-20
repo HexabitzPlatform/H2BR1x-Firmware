@@ -118,9 +118,9 @@ Module_Status MAX30100_Write(uint8_t regAddr, uint8_t txData, uint32_t timeout)
 	data[0] = regAddr;
 	data[1] = txData;
 	uint8_t size = 2;
-//	taskENTER_CRITICAL();
-//	HAL_I2C_Master_Transmit(&HANDLER_I2C_MAX30100, MAX30100_I2C_ADDRESS , data, size, timeout);
-//	taskEXIT_CRITICAL();
+	taskENTER_CRITICAL();
+	HAL_I2C_Master_Transmit(&HANDLER_I2C_MAX30100, MAX30100_I2C_ADDRESS , data, size, timeout);
+	taskEXIT_CRITICAL();
 
 	return Status;
 }
@@ -129,13 +129,13 @@ Module_Status MAX30100_Write(uint8_t regAddr, uint8_t txData, uint32_t timeout)
 Module_Status MAX30100_Read(uint8_t regAddr, uint8_t *pRxData, uint8_t size, uint32_t timeout)
 {
 	Module_Status Status = HAL_OK;
-//	taskENTER_CRITICAL();
-//	HAL_I2C_Master_Transmit(&HANDLER_I2C_MAX30100, MAX30100_I2C_ADDRESS, &regAddr, 1, timeout);
-//	taskEXIT_CRITICAL();
-//
-//	taskENTER_CRITICAL();
-//	HAL_I2C_Master_Receive(&HANDLER_I2C_MAX30100, MAX30100_I2C_ADDRESS,  pRxData, size, timeout);
-//	taskEXIT_CRITICAL();
+	taskENTER_CRITICAL();
+	HAL_I2C_Master_Transmit(&HANDLER_I2C_MAX30100, MAX30100_I2C_ADDRESS, &regAddr, 1, timeout);
+	taskEXIT_CRITICAL();
+
+	taskENTER_CRITICAL();
+	HAL_I2C_Master_Receive(&HANDLER_I2C_MAX30100, MAX30100_I2C_ADDRESS,  pRxData, size, timeout);
+	taskEXIT_CRITICAL();
 
 	return Status;
 }
