@@ -425,9 +425,9 @@ void Module_Peripheral_Init(void){
 		} else if (GetUart(i) == &huart3) {
 			index_dma[i - 1] = &(DMA1_Channel3->CNDTR);
 		} else if (GetUart(i) == &huart5) {
-			index_dma[i - 1] = &(DMA1_Channel4->CNDTR);
-		} else if (GetUart(i) == &huart6) {
 			index_dma[i - 1] = &(DMA1_Channel5->CNDTR);
+		} else if (GetUart(i) == &huart6) {
+			index_dma[i - 1] = &(DMA1_Channel6->CNDTR);
 		}
 	}
 
