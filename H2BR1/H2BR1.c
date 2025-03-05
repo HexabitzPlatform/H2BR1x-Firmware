@@ -42,18 +42,38 @@ static bool StreamCommandParser(const int8_t *pcCommandString, const char **ppSe
 /* Private variables ---------------------------------------------------------*/
 static bool stopStream = false;
 MAX30100_s MaxStruct;
-TaskHandle_t EXGTaskHandle = NULL;
-uint8_t port1, module1,mode1;
-uint8_t port2 ,module2,mode2;
-uint32_t Numofsamples1 ,timeout1;
-uint32_t Numofsamples2 ,timeout2;
+
 uint8_t flag ;
-uint8_t tofMode ;
+
+
+
+TimerHandle_t xTimerStream = NULL;
+
+/* Stream to port variables */
+volatile uint32_t PortNumOfSamples = 0u;    /* Number of samples for port streaming */
+volatile uint32_t PortSamples = 0u;         /* Current sample count for port (if needed separately) */
+uint8_t PortModule = 0u;           /* Module ID for port streaming */
+uint8_t PortNumber = 0u;           /* Port number for streaming */
+Sensor PortFunction;                    /* Function pointer or struct for port streaming */
+
+/* Stream to terminal variables */
+volatile uint32_t TerminalNumOfSamples = 0u; /* Number of samples for terminal streaming */
+volatile uint8_t TerminalPort = 0u;          /* Port number for terminal streaming */
+uint32_t TerminalTimeout = 0u;               /* Timeout value for terminal streaming */
+MAX30100_MODE TerminalFunction;                   /* Function pointer or struct for terminal streaming */
+uint8_t StreamMode = 0u;                     /* Streaming mode selector (port or terminal) */
+uint8_t StopeCliStreamFlag = 0u;             /* Flag to stop CLI streaming */
+/* General streaming variable */
+uint32_t SampleCount = 0u;                   /* Total sample counter */
+
+
 /* Private function prototypes -----------------------------------------------*/
-Module_Status ExportStreanToTerminal (uint8_t port,Sensor Sensor,uint32_t Numofsamples,uint32_t timeout);
+void StreamTimeCallback(TimerHandle_t xTimerStream);
+Module_Status SampleToTerminal(uint8_t dstPort, MAX30100_MODE mode);
+//Module_Status ExportStreanToTerminal (uint8_t port,Sensor Sensor,uint32_t Numofsamples,uint32_t timeout);
 Module_Status ExportStreanToPort (uint8_t module,uint8_t port,Sensor Sensor,uint32_t Numofsamples,uint32_t timeout);
 Module_Status Init_MAX30100(void);
-void EXGTask(void *argument);
+//void EXGTask(void *argument);
 void MAX30100_Reset();
 void MAX30100_Enable_Interrupt(INTERRUPT_EN_A_FULL_BIT aFull, INTERRUPT_EN_TEMP_RDY_BIT tempRdy, INTERRUPT_EN_HR_RDY_BIT hrRdy, INTERRUPT_EN_SPO2_RDY_BIT Spo2Rdy);
 void MAX30100_Set_Mode(MAX30100_MODE mode);
@@ -431,9 +451,9 @@ void Module_Peripheral_Init(void){
 		}
 	}
 
-	/* Create module special task (if needed) */
-	if(EXGTaskHandle == NULL)
-		xTaskCreate(EXGTask,(const char* ) "EXGTask",configMINIMAL_STACK_SIZE,NULL,osPriorityNormal - osPriorityIdle,&EXGTaskHandle);
+
+	/* Create a timeout software timer StreamSamplsToPort() API */
+		xTimerStream =xTimerCreate("StreamTimer",pdMS_TO_TICKS(1000),pdTRUE,(void* )1,StreamTimeCallback);
 
 }
 
@@ -448,12 +468,12 @@ Module_Status Module_MessagingTask(uint16_t code,uint8_t port,uint8_t src,uint8_
 	switch(code){
 	case CODE_H2BR1_HR_Sample:
 			{
-				SampletoPort(cMessage[port-1][shift],cMessage[port-1][1+shift],HR);
+				SampleToPort(cMessage[port-1][shift],cMessage[port-1][1+shift],HR);
 				break;
 			}
 		case CODE_H2BR1_SPO2_Sample:
 			{
-				SampletoPort(cMessage[port-1][shift],cMessage[port-1][1+shift],SPO2);
+				SampleToPort(cMessage[port-1][shift],cMessage[port-1][1+shift],SPO2);
 				break;
 			}
 		case CODE_H2BR1_FingerState:
@@ -508,36 +528,39 @@ void RegisterModuleCLICommands(void){
 	FreeRTOS_CLIRegisterCommand(&CLI_FingerStateCommandDefinition);
 }
 
-/*-----------------------------------------------------------*/
 
-///* Module special task function (if needed) */
-void EXGTask(void *argument) {
+/***************************************************************************/
+/*
+ * brief: Callback function triggered by a timer to manage data streaming.
+ * param xTimerStream: Handle of the timer that triggered the callback.
+ * retval: None
+ */
+void StreamTimeCallback(TimerHandle_t xTimerStream){
+	/* Increment sample counter */
+	++SampleCount;
 
-	uint8_t cases; // Test variable.
+	/* Stream mode to port: Send samples to port */
+	if(STREAM_MODE_TO_PORT == StreamMode){
+		if((SampleCount <= PortNumOfSamples) || (0 == PortNumOfSamples)){
+			SampleToPort(PortModule,PortNumber,PortFunction);
 
-	/* Infinite loop */
-	for (;;) {
-		/*  */
-
-
-		switch(tofMode){
-		case STREAM_TO_PORT :
-			ExportStreanToPort(module2, port2, mode2, Numofsamples2, timeout2);
-			break;
-		case STREAM_TO_Terminal :
-			ExportStreanToTerminal( port1, mode1, Numofsamples1, timeout1);
-			break;
-
-			default:
-				osDelay(10);
-				break;
 		}
-
-		taskYIELD();
+		else{
+			SampleCount =0;
+			xTimerStop(xTimerStream,0);
+		}
 	}
-
+	/* Stream mode to terminal: Export to terminal */
+	else if(STREAM_MODE_TO_TERMINAL == StreamMode){
+		if((SampleCount <= TerminalNumOfSamples) || (0 == TerminalNumOfSamples)){
+			SampleToTerminal(TerminalPort,TerminalFunction);
+				}
+		else{
+			SampleCount =0;
+			xTimerStop(xTimerStream,0);
+		}
+	}
 }
-
 
 /*-----------------------------------------------------------*/
 
@@ -875,46 +898,62 @@ Module_Status Init_MAX30100(void)
 
 /*-----------------------------------------------------------*/
 /*
- * @brief: Send (irSamples) or (irSamples+redSamples) to display on Terminal or draw
- * signals for heart rate and oxygenation.
- * @param1: The port you want to send from
- * @param2: The mode to be selected (HR or SPO2)
- * @retval: status
+ * @brief  Streams heart rate (HR) or oxygen saturation (SPO2) samples to the terminal.
+ * @param  dstPort: The port number used for data transmission.
+ * @param  mode: The mode of operation (HR_MODE for heart rate, SPO2_MODE for oxygenation).
+ * @retval Module_Status indicating success or failure of the operation.
  */
-Module_Status PlotToTerminal(uint8_t port, MAX30100_MODE mode)
+Module_Status SampleToTerminal(uint8_t dstPort, MAX30100_MODE mode)
 {
-	uint8_t status = H2BR1_OK;
-	char sendData[20];
-	if(port == 0)
-	return H2BR1_ERR_WRONGPARAMS;
+    Module_Status status = H2BR1_OK;   /* Initialize operation status as success */
+    char formattedString[20];          /* Buffer for formatted output string */
 
-	if(mode == HR_MODE)
-	{
-		if(MaxStruct.dataReadingFlag1 == 1)
-		{
-			MaxStruct.dataReadingFlag1 = 0;
-				for(uint8_t i = 0; i < MAX30100_FIFO_SAMPLES_SIZE; i++)
-				{
-					sprintf(sendData, "i%d\r\n", MaxStruct.irSamples[i]);
-					HAL_UART_Transmit(GetUart(port),(uint8_t *)sendData, strlen(sendData), 100);
-				}
-		}
-	}
-	else if (mode == SPO2_MODE)
-	{
-		if(MaxStruct.dataReadingFlag1 == 1)
-		{
-			MaxStruct.dataReadingFlag1 = 0;
-				for(uint8_t i = 0; i < MAX30100_FIFO_SAMPLES_SIZE; i++)
-				{
-					sprintf(sendData, "i%dr%d\r\n", MaxStruct.irSamples[i], MaxStruct.redSamples[i]);
-					HAL_UART_Transmit(GetUart(port),(uint8_t *)sendData, strlen(sendData), 100);
-				}
-		}
-	}
-	else
-		status = H2BR1_ERR_WRONGPARAMS;
-	return status;
+    /* Validate the port number */
+    if (dstPort == 0)
+    {
+        return H2BR1_ERR_WRONGPARAMS;  /* Return error for invalid port */
+    }
+
+    /* Process data based on the selected mode */
+    switch (mode)
+    {
+        case HR_MODE:
+            /* Check if new IR data is available */
+            if (MaxStruct.dataReadingFlag1 == 1)
+            {
+                MaxStruct.dataReadingFlag1 = 0;
+
+                /* Loop through IR samples and send them to the terminal */
+                for (uint8_t i = 0; i < MAX30100_FIFO_SAMPLES_SIZE; i++)
+                {
+                    snprintf(formattedString, sizeof(formattedString), "i%d\r\n", MaxStruct.irSamples[i]);
+                    HAL_UART_Transmit(GetUart(dstPort), (uint8_t*)formattedString, strlen(formattedString), 100);
+                }
+            }
+            break;
+
+        case SPO2_MODE:
+            /* Check if new IR and RED data is available */
+            if (MaxStruct.dataReadingFlag1 == 1)
+            {
+                MaxStruct.dataReadingFlag1 = 0;
+
+                /* Loop through IR and RED samples and send them to the terminal */
+                for (uint8_t i = 0; i < MAX30100_FIFO_SAMPLES_SIZE; i++)
+                {
+                    snprintf(formattedString, sizeof(formattedString), "i%dr%d\r\n", MaxStruct.irSamples[i], MaxStruct.redSamples[i]);
+                    HAL_UART_Transmit(GetUart(dstPort), (uint8_t*)formattedString, strlen(formattedString), 100);
+                }
+            }
+            break;
+
+        default:
+            status = H2BR1_ERR_WRONGPARAMS; /* Return error for invalid mode */
+            break;
+    }
+
+    /* Return final status indicating success or prior error */
+    return status;
 }
 
 /*-----------------------------------------------------------*/
@@ -1014,180 +1053,183 @@ Module_Status SPO2_Sample(uint8_t *SPO2)
 	*SPO2 = MaxStruct.SPO2;
 	return status;
 }
-
 /*-----------------------------------------------------------*/
 /*
- * @brief: send a sample on the required port or send it to another module and
- * graduate the value on the required port.
- * @brief: if the topology file is not activated, therefore The module number is 0
- * @param1: destination module.
- * @param2: port number.
- * @param3: hr or spo2 sensor.
- * @retval: status
+ * @brief  Samples data from a heart rate (HR) or oxygen saturation (SPO2) sensor
+ *         and exports it to a specified port or module.
+ * @param  dstModule: The module number to export data to.
+ * @param  dstPort: The port number to export data to.
+ * @param  sensorType: The type of sensor (HR for heart rate, SPO2 for oxygen saturation).
+ * @retval Module_Status indicating success or failure of the operation.
  */
-Module_Status SampletoPort(uint8_t module,uint8_t port, Sensor Sensor)
+Module_Status SampleToPort(uint8_t dstModule, uint8_t dstPort, Sensor dataFunction)
 {
-	uint8_t HRValue = 0 ;
-	uint8_t SPO2Value = 0;
-	uint8_t status =H2BR1_OK;
+    uint8_t hrValue = 0;        /* Variable to store heart rate sample */
+    uint8_t spo2Value = 0;      /* Variable to store oxygen saturation sample */
+    Module_Status status = H2BR1_OK; /* Initialize operation status as success */
 
-	if (port == 0 && module == myID) {
-		return H2BR1_ERR_WrongParams;
-	}
-	switch (Sensor)
-	{
-	case HR:
-		status = HR_Sample(&HRValue);
-		if (module == myID)
-		{
-			writePxITMutex(port,(char* )&HRValue,sizeof(uint8_t),10);
-		}
-		else
-		{
-			if (H2BR1_OK == status)
-					messageParams[1] = BOS_OK;
-				else
-					messageParams[1] = BOS_ERROR;
-			messageParams[0] =FMT_UINT8;
-			messageParams[2] =1;
-			messageParams[3] =(uint8_t)HRValue;
-			SendMessageToModule(module,CODE_READ_RESPONSE,sizeof(uint8_t)+3);
-		}
-		break;
-	case SPO2:
-		status = SPO2_Sample(&SPO2Value);
+    /* Validate the port and module ID */
+    if (dstPort == 0 && dstModule == myID)
+    {
+        return H2BR1_ERR_WRONGPARAMS; /* Return error for invalid parameters */
+    }
 
-		if (module == myID)
-		{
-			writePxITMutex(port,(char* )&SPO2Value,sizeof(uint8_t),10);
-		}
-		else
-		{
-			if (H2BR1_OK == status)
-					messageParams[1] = BOS_OK;
-				else
-					messageParams[1] = BOS_ERROR;
-			messageParams[0] =FMT_UINT8;
-			messageParams[2] =1;
-			messageParams[3] =(uint8_t)SPO2Value;
-			SendMessageToModule(module,CODE_READ_RESPONSE,sizeof(uint8_t)+3);
-		}
-		break;
+    /* Process data based on the requested sensor type */
+    switch (dataFunction)
+    {
+        case HR:
+        {
+            /* Sample heart rate data */
+            status = HR_Sample(&hrValue);
 
-	default:
-			status=H2BR1_ERR_WRONGPARAMS;
-	    break;
+            /* If data is to be sent locally */
+            if (dstModule == myID || dstModule == 0)
+            {
+                writePxITMutex(dstPort, (char*)&hrValue, sizeof(uint8_t), 10);
+            }
+            else
+            {
+                /* Send data to another module */
+                messageParams[1] = (status == H2BR1_OK) ? BOS_OK : BOS_ERROR;
+                messageParams[0] = FMT_UINT8;
+                messageParams[2] = 1;
+                messageParams[3] = hrValue;
 
-	}
-	return status;
+                SendMessageToModule(dstModule, CODE_READ_RESPONSE, sizeof(uint8_t) + 3);
+            }
+            break;
+        }
+
+        case SPO2:
+        {
+            /* Sample oxygen saturation data */
+            status = SPO2_Sample(&spo2Value);
+
+            /* If data is to be sent locally */
+            if (dstModule == myID || dstModule == 0)
+            {
+                writePxITMutex(dstPort, (char*)&spo2Value, sizeof(uint8_t), 10);
+            }
+            else
+            {
+                /* Send data to another module */
+                messageParams[1] = (status == H2BR1_OK) ? BOS_OK : BOS_ERROR;
+                messageParams[0] = FMT_UINT8;
+                messageParams[2] = 1;
+                messageParams[3] = spo2Value;
+
+                SendMessageToModule(dstModule, CODE_READ_RESPONSE, sizeof(uint8_t) + 3);
+            }
+            break;
+        }
+
+        default:
+            status = H2BR1_ERR_WRONGPARAMS; /* Return error for invalid sensor type */
+            break;
+    }
+
+    /* Return final status indicating success or prior error */
+    return status;
 }
-/*-----------------------------------------------------------*/
+
+/***************************************************************************/
 /*
- * @brief: send a Stream  on the required port or send it to another module and graduate
- * the value on the required port.
- * @brief: if the topology file is not activated, therefore The module number is 0
- * @param1: destination module.
- * @param2: port number.
- * @param3: hr or spo2 sensor.
- * @param4: number of samples to be send.
- * @param5: timeout (Note: the time required to send a single sample is 6000 milliseconds).
- * @retval: status
+ * brief: Streams data to the specified port and module with a given number of samples.
+ * param targetModule: The target module to which data will be streamed.
+ * param portNumber: The port number on the module.
+ * param portFunction: Type of data that will be streamed (ACC, GYRO, MAG, or TEMP).
+ * param numOfSamples: The number of samples to stream.
+ * param streamTimeout: The interval (in milliseconds) between successive data transmissions.
+ * retval: of type Module_Status indicating the success or failure of the operation.
  */
-//Module_Status StreamtoPort(uint8_t module,uint8_t port,Sensor Sensor,uint32_t Numofsamples,uint32_t timeout)
-//{
-//	uint8_t status =H2BR1_OK;
-//	uint32_t samples=0;
-//	uint32_t period=0;
-//	period=timeout/Numofsamples;
-//
-//	if (timeout < MIN_PERIOD_MS || period < MIN_PERIOD_MS)
-//		return H2BR1_ERR_WRONGPARAMS;
-//
-//	while(samples < Numofsamples)
-//	{
-//	status=SampletoPort(module,port,Sensor);
-//	vTaskDelay(pdMS_TO_TICKS(period));
-//	samples++;
-//	}
-//	samples=0;
-//	return status;
-//
-//}
-
-
-Module_Status StreamtoPort(uint8_t module,uint8_t port,Sensor Sensor,uint32_t Numofsamples,uint32_t timeout)
-{
-	Module_Status status =H2BR1_OK;
-	tofMode = STREAM_TO_PORT;
-	port2 = port;
-	module2 = module;
-	Numofsamples2 = Numofsamples;
-	timeout2 = timeout;
-	mode2 = Sensor;
-	return status;
-
-}
-/*-----------------------------------------------------------*/
-Module_Status ExportStreanToPort (uint8_t module,uint8_t port,Sensor Sensor,uint32_t Numofsamples,uint32_t timeout)
-{
-	Module_Status status =H2BR1_OK;
-	uint32_t samples=0;
-	uint32_t period=0;
-	period=timeout/Numofsamples;
-
-	if (timeout < MIN_PERIOD_MS || period < MIN_PERIOD_MS)
-		return H2BR1_ERR_WRONGPARAMS;
-
-	while(samples < Numofsamples)
-	{
-	status=SampletoPort(module,port,Sensor);
-	vTaskDelay(pdMS_TO_TICKS(period));
-	samples++;
-	}
-	module1 = DEFAULT;
-	samples=0;
-	return status;
-
-}
-/*-----------------------------------------------------------*/
-Module_Status StreamToTerminal(uint8_t port,Sensor Sensor,uint32_t Numofsamples,uint32_t timeout)
-{
-	Module_Status status =H2BR1_OK;
-	tofMode = STREAM_TO_Terminal;
-	port1 = port;
-	Numofsamples1 = Numofsamples;
-	timeout1 = timeout;
-	mode1 = Sensor;
-	return status;
-
-}
-
-/*-----------------------------------------------------------*/
-Module_Status ExportStreanToTerminal (uint8_t port,Sensor Sensor,uint32_t Numofsamples,uint32_t timeout)
+Module_Status StreamToPort(uint8_t dstModule,uint8_t dstPort,Sensor dataFunction,uint32_t numOfSamples,uint32_t streamTimeout)
  {
-	Module_Status status = H2BR1_OK;
-	uint32_t samples = 0;
-	uint32_t period = 0;
-	MAX30100_MODE mode;
-	period = timeout / Numofsamples;
+	Module_Status Status = H2BR1_OK;
 
-	if (timeout < MIN_PERIOD_MS || period < MIN_PERIOD_MS)
-		return H2BR1_ERR_WRONGPARAMS;
-	if (HR == Sensor) {
-		mode = HR_MODE;
-	} else if (SPO2 == Sensor) {
-		mode = SPO2_MODE;
-	}
-	while (samples < Numofsamples) {
-		status = PlotToTerminal(port, mode);
-		vTaskDelay(pdMS_TO_TICKS(period));
-		samples++;
-	}
-	module1 = DEFAULT;
-	samples = 0;
-	return status;
+	uint32_t SamplePeriod = 0u;
 
+	/* Check timer handle and timeout validity */
+	if ((NULL == xTimerStream) || (0 == streamTimeout) || (0 == numOfSamples)) {
+		return H2BR1_ERROR; /* Assuming H2BR1_ERROR is defined in Module_Status */
+	}
+
+	/* Set streaming parameters */
+	StreamMode = STREAM_MODE_TO_PORT;
+	PortModule =dstModule;
+	PortNumber =dstPort;
+	PortFunction =dataFunction;
+	PortNumOfSamples =numOfSamples;
+	/* Calculate the period from timeout and number of samples */
+	SamplePeriod = streamTimeout / numOfSamples;
+
+	/* Stop (Reset) the TimerStream if it's already running */
+	if (xTimerIsTimerActive(xTimerStream)) {
+		if (pdFAIL == xTimerStop(xTimerStream, 100)) {
+			return H2BR1_ERROR;
+		}
+	}
+
+	/* Start the stream timer */
+	if (pdFAIL == xTimerStart(xTimerStream, 100)) {
+		return H2BR1_ERROR;
+	}
+
+	/* Update timer timeout - This also restarts the timer */
+	if (pdFAIL == xTimerChangePeriod(xTimerStream, SamplePeriod, 100)) {
+		return H2BR1_ERROR;
+	}
+
+	return Status;
 }
+
+/***************************************************************************/
+/*
+ * brief: Streams data to the specified terminal port with a given number of samples.
+ * param targetPort: The port number on the terminal.
+ * param dataFunction: Type of data that will be streamed (ACC, GYRO, MAG, or TEMP).
+ * param numOfSamples: The number of samples to stream.
+ * param streamTimeout: The interval (in milliseconds) between successive data transmissions.
+ * retval: of type Module_Status indicating the success or failure of the operation.
+ */
+Module_Status StreamToTerminal(uint8_t dstPort,MAX30100_MODE dataFunction,uint32_t numOfSamples,uint32_t streamTimeout)
+{
+	Module_Status Status =H2BR1_OK;
+	uint32_t SamplePeriod =0u;
+	/* Check timer handle and timeout validity */
+	if((NULL == xTimerStream) || (0 == streamTimeout)){
+		return H2BR1_ERROR; /* Assuming H2BR1_ERROR is defined in Module_Status */
+	}
+
+	/* Set streaming parameters */
+		StreamMode = STREAM_MODE_TO_TERMINAL;
+		TerminalPort =dstPort;
+		TerminalFunction =dataFunction;
+		TerminalTimeout =streamTimeout;
+		TerminalNumOfSamples =numOfSamples;
+
+	/* Calculate the period from timeout and number of samples */
+	SamplePeriod =streamTimeout / numOfSamples;
+
+	/* Stop (Reset) the TimerStream if it's already running */
+	if(xTimerIsTimerActive(xTimerStream)){
+		if(pdFAIL == xTimerStop(xTimerStream,100)){
+			return H2BR1_ERROR;
+		}
+	}
+
+	/* Start the stream timer */
+	if(pdFAIL == xTimerStart(xTimerStream,100)){
+		return H2BR1_ERROR;
+	}
+
+	/* Update timer timeout - This also restarts the timer */
+	if(pdFAIL == xTimerChangePeriod(xTimerStream,SamplePeriod,100)){
+		return H2BR1_ERROR;
+	}
+
+	return Status;
+}
+
 /*-----------------------------------------------------------*/
 static Module_Status PollingSleepCLISafe(uint32_t period, long Numofsamples)
 {
@@ -1321,7 +1363,7 @@ portBASE_TYPE StreamEXGCommand(int8_t *pcWriteBuffer, size_t xWriteBufferLen, co
 
 			} else {
 
-				ExportStreanToPort(module, port, HR, Numofsamples, timeout);
+				StreamToPort(module, port, HR, Numofsamples, timeout);
 
 			}
 
@@ -1331,7 +1373,7 @@ portBASE_TYPE StreamEXGCommand(int8_t *pcWriteBuffer, size_t xWriteBufferLen, co
 
 			} else {
 
-				ExportStreanToPort(module, port, SPO2, Numofsamples, timeout);
+				StreamToPort(module, port, SPO2, Numofsamples, timeout);
 			}
 
 
