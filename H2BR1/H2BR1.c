@@ -1196,7 +1196,7 @@ Module_Status StreamToTerminal(uint8_t dstPort,MAX30100_MODE dataFunction,uint32
 	Module_Status Status =H2BR1_OK;
 	uint32_t SamplePeriod =0u;
 	/* Check timer handle and timeout validity */
-	if((NULL == xTimerStream) || (0 == streamTimeout)){
+	if((NULL == xTimerStream) || (0 == streamTimeout) || (0 == numOfSamples)){
 		return H2BR1_ERROR; /* Assuming H2BR1_ERROR is defined in Module_Status */
 	}
 
