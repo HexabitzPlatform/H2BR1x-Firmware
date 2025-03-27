@@ -99,7 +99,7 @@
 #define _IND_LED_PORT			GPIOA
 #define _IND_LED_PIN			GPIO_PIN_5
 
-#define NUM_MODULE_PARAMS		1
+#define NUM_MODULE_PARAMS		3
 
 
 /* Module EEPROM Variables */

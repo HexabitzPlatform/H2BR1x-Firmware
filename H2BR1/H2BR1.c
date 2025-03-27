@@ -34,7 +34,6 @@ typedef void (*SampleMemsToString)(char *, size_t);
 //uint32_t lastTick;
 
 /* Module exported parameters ------------------------------------------------*/
-module_param_t modParam[NUM_MODULE_PARAMS] ={{.paramPtr = NULL, .paramFormat =FMT_FLOAT, .paramName =""}};
 #define MIN_PERIOD_MS				100
 static bool StreamCommandParser(const int8_t *pcCommandString, const char **ppSensName, portBASE_TYPE *pSensNameLen,
 														bool *pPortOrCLI, uint32_t *pPeriod, uint32_t *pTimeout, uint8_t *pPort, uint8_t *pModule);
@@ -65,6 +64,16 @@ uint8_t StreamMode = 0u;                     /* Streaming mode selector (port or
 uint8_t StopeCliStreamFlag = 0u;             /* Flag to stop CLI streaming */
 /* General streaming variable */
 uint32_t SampleCount = 0u;                   /* Total sample counter */
+
+uint8_t H2BR1_heartRate = 0;
+uint8_t H2BR1_SPO2 = 0;
+FINGER_STATE H2BR1_fingerState = 0;
+/* Exported Typedef */
+module_param_t modParam[NUM_MODULE_PARAMS] = {
+    {.paramPtr = &H2BR1_heartRate, .paramFormat = FMT_UINT8, .paramName = "heartrate"},
+    {.paramPtr = &H2BR1_SPO2, .paramFormat = FMT_UINT8, .paramName = "spo2"},
+    {.paramPtr = &H2BR1_fingerState, .paramFormat = FMT_UINT8, .paramName = "fingerstate"}
+};
 
 
 /* Private function prototypes -----------------------------------------------*/
@@ -516,6 +525,53 @@ uint8_t GetPort(UART_HandleTypeDef *huart){
 
 	return 0;
 }
+/***************************************************************************/
+/* This function is useful only for input (sensors) modules.
+ * @brief: Samples a module parameter value based on parameter index.
+ * @param paramIndex: Index of the parameter (1-based index).
+ * @param value: Pointer to store the sampled float value.
+ * @retval: Module_Status indicating success or failure.
+ */
+Module_Status GetModuleParameter(uint8_t paramIndex, float *value) {
+    Module_Status status = BOS_OK;
+
+    switch (paramIndex) {
+        /* Sample Heart Rate */
+        case 1: {
+            uint8_t temp = 0;
+            status = HR_Sample(&temp);
+            if (status == BOS_OK)
+                *value = (float)temp;
+            break;
+        }
+
+        /* Sample SPO2 */
+        case 2: {
+            uint8_t temp = 0;
+            status = SPO2_Sample(&temp);
+            if (status == BOS_OK)
+                *value = (float)temp;
+            break;
+        }
+
+        /* Sample Finger State */
+        case 3: {
+            FINGER_STATE temp;
+            status = FingerState(&temp);
+            if (status == BOS_OK)
+                *value = (float)temp;
+            break;
+        }
+
+        /* Invalid parameter index */
+        default:
+            status = BOS_ERR_WrongParam;
+            break;
+    }
+
+    return status;
+}
+
 
 /*-----------------------------------------------------------*/
 
