@@ -103,12 +103,14 @@ void SampleSPO2ToString(char *cstring, size_t maxLen);
 void Read_Data_When_Interrupt();
 void Oxymeter_Calculating_HR_SPO2();
 
-
+Module_Status StreamToCLI(uint32_t Numofsamples, uint32_t timeout,Sensor Sensor);
+static Module_Status PollingSleepCLISafe(uint32_t period, long Numofsamples);
+static Module_Status StreamMemsToCLI(uint32_t Numofsamples, uint32_t timeout, SampleMemsToString function);
 /* Create CLI commands --------------------------------------------------------*/
 portBASE_TYPE CLI_HR_SampleCommand( int8_t *pcWriteBuffer, size_t xWriteBufferLen, const int8_t *pcCommandString );
 portBASE_TYPE CLI_SPO2_SampleCommand( int8_t *pcWriteBuffer, size_t xWriteBufferLen, const int8_t *pcCommandString );
 portBASE_TYPE CLI_FingerStateCommand( int8_t *pcWriteBuffer, size_t xWriteBufferLen, const int8_t *pcCommandString );
-portBASE_TYPE StreamEXGCommand( int8_t *pcWriteBuffer, size_t xWriteBufferLen, const int8_t *pcCommandString );
+portBASE_TYPE StreamSPO2Command( int8_t *pcWriteBuffer, size_t xWriteBufferLen, const int8_t *pcCommandString );
 
 /*-----------------------------------------------------------*/
 /* CLI command structure : HR_Sample */
@@ -132,7 +134,7 @@ const CLI_Command_Definition_t CLI_SPO2_SampleCommandDefinition =
 const CLI_Command_Definition_t StreamCommandDefinition = {
 	(const int8_t *) "stream",
 	(const int8_t *) "stream:\r\n Syntax: stream [EMG]/[EEG]/[EOG]/[ECG] (Numofsamples ) (time in ms) [port] [module].\r\n\r\n",
-	StreamEXGCommand,
+	StreamSPO2Command,
 	-1
 };
 /*-----------------------------------------------------------*/
@@ -549,10 +551,10 @@ void SetupPortForRemoteBootloaderUpdate(uint8_t port){
 
 /***************************************************************************/
 /* H2BR1 module initialization */
-void Module_Peripheral_Init(void){
+void Module_Peripheral_Init(void) {
 
-	 __HAL_RCC_GPIOB_CLK_ENABLE();
-	 __HAL_RCC_GPIOA_CLK_ENABLE();
+//	 __HAL_RCC_GPIOB_CLK_ENABLE();
+//	 __HAL_RCC_GPIOA_CLK_ENABLE();
 
 	/* Array ports */
 	MX_USART1_UART_Init();
@@ -561,11 +563,11 @@ void Module_Peripheral_Init(void){
 	MX_USART5_UART_Init();
 	MX_USART6_UART_Init();
 
-    SPO2GPIOInit();
+	SPO2GPIOInit();
 	MX_I2C_Init();
 	Init_MAX30100();
 
-	 //Circulating DMA Channels ON All Module
+	/* Circulating DMA Channels ON All Module */
 	for (int i = 1; i <= NUM_OF_PORTS; i++) {
 		if (GetUart(i) == &huart1) {
 			dmaIndex[i - 1] = &(DMA1_Channel1->CNDTR);
@@ -580,34 +582,30 @@ void Module_Peripheral_Init(void){
 		}
 	}
 
-
 	/* Create a timeout software timer StreamSamplsToPort() API */
-		xTimerStream =xTimerCreate("StreamTimer",pdMS_TO_TICKS(1000),pdTRUE,(void* )1,StreamTimeCallback);
+	xTimerStream = xTimerCreate("StreamTimer", pdMS_TO_TICKS(1000), pdTRUE, (void*) 1, StreamTimeCallback);
 
 }
 
-/*-----------------------------------------------------------*/
-/* --- H2BR1 message processing task.
- */
-Module_Status Module_MessagingTask(uint16_t code,uint8_t port,uint8_t src,uint8_t dst,uint8_t shift){
-	Module_Status result =H2BR1_OK;
-	 uint8_t fingerState =0;
-	 uint8_t module=0;
+/***************************************************************************/
+/*  H2BR1 message processing task */
+Module_Status Module_MessagingTask(uint16_t code, uint8_t port, uint8_t src, uint8_t dst, uint8_t shift) {
+	Module_Status result = H2BR1_OK;
+	uint8_t fingerState = 0;
+	uint8_t module = 0;
 
-	switch(code){
+	switch (code) {
+
 	case CODE_H2BR1_HR_Sample:
-			{
-				SampleToPort(cMessage[port-1][shift],cMessage[port-1][1+shift],HR);
-				break;
-			}
-		case CODE_H2BR1_SPO2_Sample:
-			{
-				SampleToPort(cMessage[port-1][shift],cMessage[port-1][1+shift],SPO2);
-				break;
-			}
-		case CODE_H2BR1_FingerState:
-			{
-				Module_Status status ;
+		SampleToPort(cMessage[port - 1][shift], cMessage[port - 1][1 + shift], HR);
+		break;
+
+	case CODE_H2BR1_SPO2_Sample:
+		SampleToPort(cMessage[port - 1][shift], cMessage[port - 1][1 + shift], SPO2);
+		break;
+
+	case CODE_H2BR1_FingerState:
+		Module_Status status;
 		module = cMessage[port - 1][shift];
 		port = cMessage[port - 1][1 + shift];
 		status = FingerState(&fingerState);
@@ -615,21 +613,23 @@ Module_Status Module_MessagingTask(uint16_t code,uint8_t port,uint8_t src,uint8_
 			MessageParams[1] = BOS_OK;
 		else
 			MessageParams[1] = BOS_ERROR;
+
 		MessageParams[0] = FMT_UINT8;
 		MessageParams[2] = 1;
 		MessageParams[3] = (uint8_t) fingerState;
 		SendMessageToModule(module, CODE_READ_RESPONSE, sizeof(uint8_t) + 3);
 		break;
+
+	default:
+		result = H2BR1_ERR_UNKNOWNMESSAGE;
+		break;
 	}
-		default:
-			    result =H2BR1_ERR_UNKNOWNMESSAGE;
-			    break;
-	}
-	
+
 	return result;
 }
-/* --- Get the port for a given UART. 
- */
+
+/***************************************************************************/
+/* Get the port for a given UART */
 uint8_t GetPort(UART_HandleTypeDef *huart){
 
 	if(huart->Instance == USART6)
@@ -645,58 +645,9 @@ uint8_t GetPort(UART_HandleTypeDef *huart){
 
 	return 0;
 }
+
 /***************************************************************************/
-/* This function is useful only for input (sensors) modules.
- * @brief: Samples a module parameter value based on parameter index.
- * @param paramIndex: Index of the parameter (1-based index).
- * @param value: Pointer to store the sampled float value.
- * @retval: Module_Status indicating success or failure.
- */
-Module_Status GetModuleParameter(uint8_t paramIndex, float *value) {
-    Module_Status status = BOS_OK;
-
-    switch (paramIndex) {
-        /* Sample Heart Rate */
-        case 1: {
-            uint8_t temp = 0;
-            status = HR_Sample(&temp);
-            if (status == BOS_OK)
-                *value = (float)temp;
-            break;
-        }
-
-        /* Sample SPO2 */
-        case 2: {
-            uint8_t temp = 0;
-            status = SPO2_Sample(&temp);
-            if (status == BOS_OK)
-                *value = (float)temp;
-            break;
-        }
-
-        /* Sample Finger State */
-        case 3: {
-            FINGER_STATE temp;
-            status = FingerState(&temp);
-            if (status == BOS_OK)
-                *value = (float)temp;
-            break;
-        }
-
-        /* Invalid parameter index */
-        default:
-            status = BOS_ERR_WrongParam;
-            break;
-    }
-
-    return status;
-}
-
-
-/*-----------------------------------------------------------*/
-
-/* --- Register this module CLI Commands
- */
+/* Register this module CLI Commands */
 void RegisterModuleCLICommands(void){
 	FreeRTOS_CLIRegisterCommand(&StreamCommandDefinition);
 	FreeRTOS_CLIRegisterCommand(&CLI_HR_SampleCommandDefinition);
@@ -704,187 +655,226 @@ void RegisterModuleCLICommands(void){
 	FreeRTOS_CLIRegisterCommand(&CLI_FingerStateCommandDefinition);
 }
 
+/***************************************************************************/
+/* This function is useful only for input (sensors) modules.
+ * Samples a module parameter value based on parameter index.
+ * paramIndex: Index of the parameter (1-based index).
+ * value: Pointer to store the sampled float value.
+ */
+Module_Status GetModuleParameter(uint8_t paramIndex, float *value) {
+	Module_Status status = BOS_OK;
+	FINGER_STATE FingerTemp;
+	uint8_t temp = 0;
+
+	switch (paramIndex) {
+
+	/* Sample Heart Rate */
+	case 1:
+		status = HR_Sample(&temp);
+		if (status == BOS_OK)
+			*value = (float) temp;
+		break;
+
+		/* Sample SPO2 */
+	case 2:
+		status = SPO2_Sample(&temp);
+		if (status == BOS_OK)
+			*value = (float) temp;
+		break;
+
+		/* Sample Finger State */
+	case 3:
+		status = FingerState(&FingerTemp);
+		if (status == BOS_OK)
+			*value = (float) FingerTemp;
+		break;
+
+		/* Invalid parameter index */
+	default:
+		status = BOS_ERR_WrongParam;
+		break;
+	}
+
+	return status;
+}
 
 /***************************************************************************/
-/*
- * brief: Callback function triggered by a timer to manage data streaming.
- * param xTimerStream: Handle of the timer that triggered the callback.
- * retval: None
+/****************************** Local Functions ****************************/
+/***************************************************************************/
+/* Callback function triggered by a timer to manage data streaming.
+ * xTimerStream: Handle of the timer that triggered the callback.
  */
-void StreamTimeCallback(TimerHandle_t xTimerStream){
+void StreamTimeCallback(TimerHandle_t xTimerStream) {
+
 	/* Increment sample counter */
 	++SampleCount;
 
 	/* Stream mode to port: Send samples to port */
-	if(STREAM_MODE_TO_PORT == StreamMode){
-		if((SampleCount <= PortNumOfSamples) || (0 == PortNumOfSamples)){
-			SampleToPort(PortModule,PortNumber,PortFunction);
+	if (STREAM_MODE_TO_PORT == StreamMode) {
+		if ((SampleCount <= PortNumOfSamples) || (0 == PortNumOfSamples)) {
+			SampleToPort(PortModule, PortNumber, PortFunction);
 
-		}
-		else{
-			SampleCount =0;
-			xTimerStop(xTimerStream,0);
+		} else {
+			SampleCount = 0;
+			xTimerStop(xTimerStream, 0);
 		}
 	}
+
 	/* Stream mode to terminal: Export to terminal */
-	else if(STREAM_MODE_TO_TERMINAL == StreamMode){
-		if((SampleCount <= TerminalNumOfSamples) || (0 == TerminalNumOfSamples)){
-			SampleToTerminal(TerminalPort,TerminalFunction);
-				}
-		else{
-			SampleCount =0;
-			xTimerStop(xTimerStream,0);
+	else if (STREAM_MODE_TO_TERMINAL == StreamMode) {
+		if ((SampleCount <= TerminalNumOfSamples)
+				|| (0 == TerminalNumOfSamples)) {
+			SampleToTerminal(TerminalPort, TerminalFunction);
+		} else {
+			SampleCount = 0;
+			xTimerStop(xTimerStream, 0);
 		}
 	}
 }
 
-/*-----------------------------------------------------------*/
-
-/* -----------------------------------------------------------------------
- |							 	Local  APIs			    		          | 																 	|
-/* -----------------------------------------------------------------------
- * */
-void MAX30100_Reset()
-{
+/***************************************************************************/
+void MAX30100_Reset() {
 	uint8_t modeConfReg = 0;
+
 	modeConfReg = modeConfReg & MAX30100_MODE_CONF_RESET_MASK;
 	MAX30100_Write(MAX30100_MODE_CONF_ADDR, modeConfReg, 100);
+
 	// delay until completing reset process
 	HAL_Delay(1);
 	MaxStruct.modeConfReg = modeConfReg;
 }
 
-/*-----------------------------------------------------------*/
-void MAX30100_Enable_Interrupt(INTERRUPT_EN_A_FULL_BIT aFull, INTERRUPT_EN_TEMP_RDY_BIT tempRdy, INTERRUPT_EN_HR_RDY_BIT hrRdy, INTERRUPT_EN_SPO2_RDY_BIT Spo2Rdy)
-{
-	uint8_t interrEnReg = aFull | tempRdy | hrRdy | Spo2Rdy;
-	MAX30100_Write(MAX30100_INTERRUPT_EN_ADDR , interrEnReg, 100);
-	MaxStruct.interruptEnableReg = interrEnReg;
+/***************************************************************************/
+void MAX30100_Enable_Interrupt(INTERRUPT_EN_A_FULL_BIT aFull, INTERRUPT_EN_TEMP_RDY_BIT tempRdy, INTERRUPT_EN_HR_RDY_BIT hrRdy,
+		INTERRUPT_EN_SPO2_RDY_BIT Spo2Rdy) {
 
+	uint8_t interrEnReg = aFull | tempRdy | hrRdy | Spo2Rdy;
+	MAX30100_Write(MAX30100_INTERRUPT_EN_ADDR, interrEnReg, 100);
+	MaxStruct.interruptEnableReg = interrEnReg;
 }
 
-/*-----------------------------------------------------------*/
-void MAX30100_Set_Mode(MAX30100_MODE mode)
-{
+/***************************************************************************/
+void MAX30100_Set_Mode(MAX30100_MODE mode) {
 	MaxStruct.mode = mode;
 	uint8_t modeConfReg = 0;
+
 	MAX30100_Read(MAX30100_MODE_CONF_ADDR, &modeConfReg, 1, 100);
-    modeConfReg = (modeConfReg & ~MAX30100_MODE_CONF_MODE_MASK) | (mode << MAX30100_MODE_CONF_MODE_POSITION);
-    if(mode == SPO2_MODE)
-		//Enable Temp_En bit
+	modeConfReg = (modeConfReg & ~MAX30100_MODE_CONF_MODE_MASK) | (mode << MAX30100_MODE_CONF_MODE_POSITION);
+	/*Enable Temp_En bit */
+	if (mode == SPO2_MODE)
 		modeConfReg |= MAX30100_MODE_CONF_TEMP_EN_MASK;
-    else
-    	//Disable Temp_En bit
-    	{modeConfReg &= ~MAX30100_MODE_CONF_TEMP_EN_MASK;}
+	/* Disable Temp_En bit */
+	else
+		modeConfReg &= ~MAX30100_MODE_CONF_TEMP_EN_MASK;
+
 	MAX30100_Write(MAX30100_MODE_CONF_ADDR, modeConfReg, 100);
 	MaxStruct.modeConfReg = modeConfReg;
-	if(mode == UNUSED_MODE)
-		// disable all interrupt bits
-	MAX30100_Enable_Interrupt(INTERRUPT_EN_AFULL_DISABLED, INTERRUPT_EN_TEMP_RDY_DISABLED, INTERRUPT_EN_HR_RDY_DISABLED, INTERRUPT_EN_SPO2_RDY_DISABLED);
+	/* disable all interrupt bits */
+	if (mode == UNUSED_MODE)
+		MAX30100_Enable_Interrupt(INTERRUPT_EN_AFULL_DISABLED, INTERRUPT_EN_TEMP_RDY_DISABLED,
+				INTERRUPT_EN_HR_RDY_DISABLED, INTERRUPT_EN_SPO2_RDY_DISABLED);
+	/* enable A_Full interrupt bit */
 	else
-		// enable A_Full interrupt bit
-	MAX30100_Enable_Interrupt(INTERRUPT_EN_AFULL_ENABLED, INTERRUPT_EN_TEMP_RDY_DISABLED, INTERRUPT_EN_HR_RDY_DISABLED, INTERRUPT_EN_SPO2_RDY_DISABLED);
+		MAX30100_Enable_Interrupt(INTERRUPT_EN_AFULL_ENABLED, INTERRUPT_EN_TEMP_RDY_DISABLED,
+				INTERRUPT_EN_HR_RDY_DISABLED, INTERRUPT_EN_SPO2_RDY_DISABLED);
 }
 
-/*-----------------------------------------------------------*/
-void MAX30100_Set_SpO2_SampleRate(MAX30100_SpO2_SR sampleRate )
-{
-	MaxStruct.SPO2SampleRate= sampleRate;
+/***************************************************************************/
+void MAX30100_Set_SpO2_SampleRate(MAX30100_SpO2_SR sampleRate) {
 	uint8_t SPO2ConfReg = 0;
+	MaxStruct.SPO2SampleRate = sampleRate;
+
 	MAX30100_Read(MAX30100_SPO2_CONF_ADDR, &SPO2ConfReg, 1, 100);
 	SPO2ConfReg = (SPO2ConfReg & ~MAX30100_SPO2_CONF_SR_MASK) | (sampleRate << MAX30100_SPO2_CONF_SR_POSITION);
-	MAX30100_Write(MAX30100_SPO2_CONF_ADDR , SPO2ConfReg, 100);
+
+	MAX30100_Write(MAX30100_SPO2_CONF_ADDR, SPO2ConfReg, 100);
 	MaxStruct.SPO2ConfReg = SPO2ConfReg;
 }
 
-/*-----------------------------------------------------------*/
-void MAX30100_Set_Led_PulseWidth(MAX30100_LED_PW pulseWidth )
-{
-	MaxStruct.ledPulseWidth = pulseWidth;
+/***************************************************************************/
+void MAX30100_Set_Led_PulseWidth(MAX30100_LED_PW pulseWidth) {
 	uint8_t SPO2ConfReg = 0;
+	MaxStruct.ledPulseWidth = pulseWidth;
+
 	MAX30100_Read(MAX30100_SPO2_CONF_ADDR, &SPO2ConfReg, 1, 100);
 	SPO2ConfReg = (SPO2ConfReg & ~MAX30100_SPO2_CONF_LED_PW_MASK) | ((pulseWidth << MAX30100_SPO2_CONF_LED_PW_POSITION) & MAX30100_SPO2_CONF_LED_PW_MASK);
-	MAX30100_Write(MAX30100_SPO2_CONF_ADDR , SPO2ConfReg, 100);
+
+	MAX30100_Write(MAX30100_SPO2_CONF_ADDR, SPO2ConfReg, 100);
 	MaxStruct.SPO2ConfReg = SPO2ConfReg;
 }
 
-/*-----------------------------------------------------------*/
-void MAX30100_Set_Led_Current(MAX30100_LED_Current redPa, MAX30100_LED_Current irPa )
-{
-	MaxStruct.redPa = redPa;
+/***************************************************************************/
+void MAX30100_Set_Led_Current(MAX30100_LED_Current redPa, MAX30100_LED_Current irPa) {
 	uint8_t ledConfReg = 0;
-	ledConfReg= (redPa << MAX30100_LED_CONF_RED_PA_POSITION) | (irPa << MAX30100_LED_CONF_IR_PA_POSITION);
+	MaxStruct.redPa = redPa;
+
+	ledConfReg = (redPa << MAX30100_LED_CONF_RED_PA_POSITION) | (irPa << MAX30100_LED_CONF_IR_PA_POSITION);
 	MAX30100_Write(MAX30100_LED_CONF_ADDR, ledConfReg, 100);
-	MaxStruct.ledConfReg= ledConfReg;
+	MaxStruct.ledConfReg = ledConfReg;
 }
 
-/*-----------------------------------------------------------*/
-void MAX30100_Read_FIFO()
-{
-	uint8_t fifoData[MAX30100_FIFO_DATA_SIZE] = {0};
-	// timeout =1000msec; reading 16 samples needs from 15-300msec
-	MAX30100_Read(MAX30100D_FIFO_DATA_ADDR, fifoData, MAX30100_FIFO_DATA_SIZE, 1000);
-	uint8_t i=0, j=0;
-	for (i = 0; i < MAX30100_FIFO_SAMPLES_SIZE; i++)
-	{
-		// First read byte is MSB. Size of sample is 2 bytes
-		MaxStruct.irSamples[i]  = (fifoData[j] << 8) | fifoData[j+1];
-		MaxStruct.redSamples[i]= (fifoData[j+2] << 8) | fifoData[j+3];
-		j+=4;
-	}
- }
+/***************************************************************************/
+void MAX30100_Read_FIFO() {
+	uint8_t i = 0, j = 0;
+	uint8_t fifoData[MAX30100_FIFO_DATA_SIZE] = { 0 };
 
-/*-----------------------------------------------------------*/
-void MAX30100_Clear_FIFO(void)
-{
+	/* timeout =1000msec; reading 16 samples needs from 15-300msec */
+	MAX30100_Read(MAX30100D_FIFO_DATA_ADDR, fifoData, MAX30100_FIFO_DATA_SIZE, 1000);
+
+	for (i = 0; i < MAX30100_FIFO_SAMPLES_SIZE; i++) {
+		/* First read byte is MSB. Size of sample is 2 bytes */
+		MaxStruct.irSamples[i] = (fifoData[j] << 8) | fifoData[j + 1];
+		MaxStruct.redSamples[i] = (fifoData[j + 2] << 8) | fifoData[j + 3];
+		j += 4;
+	}
+}
+
+/***************************************************************************/
+void MAX30100_Clear_FIFO(void) {
+
 	MAX30100_Write(MAX30100_FIFO_W_PTR_ADDR, 0x00, 100);
 	MAX30100_Write(MAX30100_OVF_COUNTER_ADDR, 0x00, 100);
 	MAX30100_Write(MAX30100_FIFO_R_PTR_ADDR, 0x00, 100);
 }
 
-/*-----------------------------------------------------------*/
-void Oxymeter_Add_Samples_To_Buffers()
-{
+/***************************************************************************/
+void Oxymeter_Add_Samples_To_Buffers() {
 	uint16_t buffIndex = MaxStruct.bufferIndex; // last value of bufferIndex
+
 	if (buffIndex >= OXYMETER_MAX_BUFFER_SIZE)
 		buffIndex = 0;
-	for(uint8_t i = 0; i< MAX30100_FIFO_SAMPLES_SIZE; i++)
-	{
-		if (buffIndex < OXYMETER_MAX_BUFFER_SIZE)
-		{
+
+	for (uint8_t i = 0; i < MAX30100_FIFO_SAMPLES_SIZE; i++) {
+		if (buffIndex < OXYMETER_MAX_BUFFER_SIZE) {
 			MaxStruct.irRawBuffer[buffIndex] = MaxStruct.irSamples[i];
-			MaxStruct.redRawBuffer [buffIndex] = MaxStruct.redSamples[i];
+			MaxStruct.redRawBuffer[buffIndex] = MaxStruct.redSamples[i];
 			buffIndex++;
 		}
 	}
 	MaxStruct.bufferIndex = buffIndex;
 }
 
-/*-----------------------------------------------------------*/
-void Oxymeter_Modify_Led_Current_Bias()
-{
-	if(MaxStruct.mode == SPO2_MODE)
-	{
-		uint8_t redLedCurrentIndex = (uint8_t) (MaxStruct.redPa);
-		uint32_t tLastModified = MaxStruct.timeLastBiasModified;
-		uint8_t needModifying = 0;
-		if (HAL_GetTick() - tLastModified > CURRENT_MODIFYING_DURATION_MS)
-		{
-			if (MaxStruct.irSamples[0] - MaxStruct.redSamples[0] >  CURRENT_MODIFYING_THRESHOLD  && redLedCurrentIndex < MAX30100_LED_CURRENT_50P0)
-			{
+/***************************************************************************/
+void Oxymeter_Modify_Led_Current_Bias() {
+	uint8_t needModifying = 0;
+	uint8_t redLedCurrentIndex = (uint8_t) (MaxStruct.redPa);
+	uint32_t tLastModified = MaxStruct.timeLastBiasModified;
+
+	if (MaxStruct.mode == SPO2_MODE) {
+
+		if (HAL_GetTick() - tLastModified > CURRENT_MODIFYING_DURATION_MS) {
+			if (MaxStruct.irSamples[0] - MaxStruct.redSamples[0] > CURRENT_MODIFYING_THRESHOLD && redLedCurrentIndex < MAX30100_LED_CURRENT_50P0) {
 				++redLedCurrentIndex;
 				needModifying = 1;
 			}
 
-			else if (MaxStruct.redSamples[0] - MaxStruct.irSamples[0] >  CURRENT_MODIFYING_THRESHOLD  && redLedCurrentIndex > MAX30100_LED_CURRENT_0P0)
-			{
+			else if (MaxStruct.redSamples[0] - MaxStruct.irSamples[0] > CURRENT_MODIFYING_THRESHOLD && redLedCurrentIndex > MAX30100_LED_CURRENT_0P0) {
 				--redLedCurrentIndex;
 				needModifying = 1;
-			}
-			else MaxStruct.currentBiasState = CURRENT_BIAS_STATE_OK;
+			} else
+				MaxStruct.currentBiasState = CURRENT_BIAS_STATE_OK;
 
-			if (needModifying == 1)
-			{
+			if (needModifying == 1) {
 				MaxStruct.currentBiasState = CURRENT_BIAS_STATE_NOT_OK;
 				MAX30100_Set_Led_Current(redLedCurrentIndex, MAX30100_LED_CURRENT_50P0);
 				MaxStruct.timeLastBiasModified = HAL_GetTick();
@@ -893,64 +883,66 @@ void Oxymeter_Modify_Led_Current_Bias()
 	}
 }
 
-/*-----------------------------------------------------------*/
-void Oxymeter_Detect_Finger()
-{
+/***************************************************************************/
+void Oxymeter_Detect_Finger() {
 	MaxStruct.fingerState = FINGER_STATE_NOT_DETECTED;
-	for (uint8_t i=0; i<MAX30100_FIFO_SAMPLES_SIZE; i++)
-		{
-			if (MaxStruct.irSamples[i] > FINGER_DETECTING_THRESHOLD)
-				MaxStruct.fingerState = FINGER_STATE_DETECTED;
-			else
-			{
-				MaxStruct.fingerState = FINGER_STATE_NOT_DETECTED;
-				MaxStruct.bufferIndex = 0;
-				MaxStruct.heartRate = 0;
-				MaxStruct.SPO2 =0;
-				break;
-			}
+
+	for (uint8_t i = 0; i < MAX30100_FIFO_SAMPLES_SIZE; i++) {
+		if (MaxStruct.irSamples[i] > FINGER_DETECTING_THRESHOLD)
+			MaxStruct.fingerState = FINGER_STATE_DETECTED;
+		else {
+			MaxStruct.fingerState = FINGER_STATE_NOT_DETECTED;
+			MaxStruct.bufferIndex = 0;
+			MaxStruct.heartRate = 0;
+			MaxStruct.SPO2 = 0;
+			break;
 		}
+	}
 }
 
 /*-----------------------------------------------------------*/
-void Oxymeter_Signal_Processing()
-{
-	MaxStruct. processStartTick = HAL_GetTick();
-	float ts= 0.009407; // should be 0.01 but period of sample from IC not accurate (0.009407); fs=100
+void Oxymeter_Signal_Processing() {
+	float ts = 0.009407; /* should be 0.01 but period of sample from IC not accurate (0.009407); fs=100 */
+	MaxStruct.processStartTick = HAL_GetTick();
+
 	/************Removing DC (HPF)*************/
-	float irRemovedDC [OXYMETER_MAX_BUFFER_SIZE]={0};
-	float redRemovedDC [OXYMETER_MAX_BUFFER_SIZE]={0};
+	float irRemovedDC[OXYMETER_MAX_BUFFER_SIZE] = { 0 };
+	float redRemovedDC[OXYMETER_MAX_BUFFER_SIZE] = { 0 };
 	// HPF: 1st order, Fc=0.8Hz
-	uint16_t previousInput=0;
-	uint16_t currentInput=0;
+	uint16_t previousInput = 0;
+	uint16_t currentInput = 0;
 	// HPF: 1st order, Fc=0.8Hz, fs=100
-	for(uint16_t i = 1; i< OXYMETER_MAX_BUFFER_SIZE; i++)
-	{
-		previousInput = MaxStruct.irRawBuffer[i-1];
+	for (uint16_t i = 1; i < OXYMETER_MAX_BUFFER_SIZE; i++) {
+		previousInput = MaxStruct.irRawBuffer[i - 1];
 		currentInput = MaxStruct.irRawBuffer[i];
-		irRemovedDC[i] = 0.9755 * (float)currentInput - 0.9755 * (float)previousInput + 0.9510 * irRemovedDC[i-1];
+		irRemovedDC[i] = 0.9755 * (float) currentInput
+				- 0.9755 * (float) previousInput + 0.9510 * irRemovedDC[i - 1];
 	}
 	// HPF: 1st order, Fc=0.8Hz, fs=100
-	for(uint16_t i = 1; i< OXYMETER_MAX_BUFFER_SIZE; i++)
-	{
-		previousInput = MaxStruct.redRawBuffer[i-1];
+	for (uint16_t i = 1; i < OXYMETER_MAX_BUFFER_SIZE; i++) {
+		previousInput = MaxStruct.redRawBuffer[i - 1];
 		currentInput = MaxStruct.redRawBuffer[i];
-		redRemovedDC[i] = 0.9755 * (float)currentInput - 0.9755 * (float)previousInput + 0.9510 * redRemovedDC[i-1];
+		redRemovedDC[i] = 0.9755 * (float) currentInput
+				- 0.9755 * (float) previousInput + 0.9510 * redRemovedDC[i - 1];
 	}
 	/************LPF Filtering************/
-	float irFiltered [OXYMETER_MAX_BUFFER_SIZE]={0};
+	float irFiltered[OXYMETER_MAX_BUFFER_SIZE] = { 0 };
 	// HPF: 2nd order, Fc=2Hz, fs=100
-	for(uint16_t i = 2; i< OXYMETER_MAX_BUFFER_SIZE; i++)
-		irFiltered[i] = 0.0036 * irRemovedDC[i] + 0.0072 * irRemovedDC[i-1] + 0.0036 * irRemovedDC[i-2] + 1.8227 * irFiltered[i-1] - 0.8372 * irFiltered[i-2];
+	for (uint16_t i = 2; i < OXYMETER_MAX_BUFFER_SIZE; i++)
+		irFiltered[i] = 0.0036 * irRemovedDC[i] + 0.0072 * irRemovedDC[i - 1]
+				+ 0.0036 * irRemovedDC[i - 2] + 1.8227 * irFiltered[i - 1]
+				- 0.8372 * irFiltered[i - 2];
 	/************Detecting Peaks***********/
-	uint8_t numOfPeaks=0;
-	uint16_t peakIndex[3]={0};
-	for(uint16_t i = (FILTERING_SAMPLES_SHIFT + WINDOW_FOR_DETECING_PEAK); i< (OXYMETER_MAX_BUFFER_SIZE - WINDOW_FOR_DETECING_PEAK); i++)
-	{
-		if (irFiltered[i] < irFiltered[i-1] && irFiltered[i] < irFiltered[i+1]) // min peak
-		{
-			if (irFiltered[i] < irFiltered[i - WINDOW_FOR_DETECING_PEAK] && irFiltered[i] < irFiltered[i + WINDOW_FOR_DETECING_PEAK])
-			{
+	uint8_t numOfPeaks = 0;
+	uint16_t peakIndex[3] = { 0 };
+	for (uint16_t i = (FILTERING_SAMPLES_SHIFT + WINDOW_FOR_DETECING_PEAK);
+			i < (OXYMETER_MAX_BUFFER_SIZE - WINDOW_FOR_DETECING_PEAK); i++) {
+		if (irFiltered[i] < irFiltered[i - 1]
+				&& irFiltered[i] < irFiltered[i + 1]) // min peak
+						{
+			if (irFiltered[i] < irFiltered[i - WINDOW_FOR_DETECING_PEAK]
+					&& irFiltered[i]
+							< irFiltered[i + WINDOW_FOR_DETECING_PEAK]) {
 				numOfPeaks++;
 				peakIndex[numOfPeaks - 1] = i;
 				if (numOfPeaks == 3)
@@ -960,468 +952,212 @@ void Oxymeter_Signal_Processing()
 	}
 	MaxStruct.numOfPeaks = numOfPeaks;
 	/*****Calculating Heart Rate (HR)******/
-	uint16_t  peakInd1=0,  peakInd2=0,  peakInd3=0;
-	float durP1_P2=0, durP2_P3=0, samplesP1_P3=0;
-	float period=0;
-	float HR=0;
-	if (numOfPeaks == 3)
-	{
-		 peakInd1 = peakIndex[0];
-		 peakInd2 = peakIndex[1];
-		 peakInd3 = peakIndex[2];
-		 durP1_P2 = (peakInd2 - peakInd1) * ts;
-		 durP2_P3 = (peakInd3 - peakInd2) * ts;
-		 samplesP1_P3 = peakInd3 - peakInd1;
-		 MaxStruct.durationBetweenPeak1Peak2 = durP1_P2;
-		 MaxStruct.durationBetweenPeak2Peak3 = durP2_P3;
-		 MaxStruct.samplesBetweenPeak1Peak3 = samplesP1_P3;
-		 if (durP1_P2 > MIN_HEART_PERIOD_SEC && durP1_P2 < MAX_HEART_PERIOD_SEC)
-		 {
-			 if (durP1_P2 <= 1.2 * durP2_P3 && durP1_P2 >= 0.8 * durP2_P3)
-			 {
-				 period = (durP1_P2 + durP2_P3) / 2.0 ; // period = mean of (durP1_P2, durP2_P3)
-				 HR = 60.0 / period; // HR=60/T
-				 MaxStruct.heartRate = roundf(HR);
-			 }
-		 }
-		 else MaxStruct.heartRate = 0;
-	}
-	else MaxStruct.heartRate = 0;
+	uint16_t peakInd1 = 0, peakInd2 = 0, peakInd3 = 0;
+	float durP1_P2 = 0, durP2_P3 = 0, samplesP1_P3 = 0;
+	float period = 0;
+	float HR = 0;
+	if (numOfPeaks == 3) {
+		peakInd1 = peakIndex[0];
+		peakInd2 = peakIndex[1];
+		peakInd3 = peakIndex[2];
+		durP1_P2 = (peakInd2 - peakInd1) * ts;
+		durP2_P3 = (peakInd3 - peakInd2) * ts;
+		samplesP1_P3 = peakInd3 - peakInd1;
+		MaxStruct.durationBetweenPeak1Peak2 = durP1_P2;
+		MaxStruct.durationBetweenPeak2Peak3 = durP2_P3;
+		MaxStruct.samplesBetweenPeak1Peak3 = samplesP1_P3;
+		if (durP1_P2 > MIN_HEART_PERIOD_SEC && durP1_P2 < MAX_HEART_PERIOD_SEC) {
+			if (durP1_P2 <= 1.2 * durP2_P3 && durP1_P2 >= 0.8 * durP2_P3) {
+				period = (durP1_P2 + durP2_P3) / 2.0; // period = mean of (durP1_P2, durP2_P3)
+				HR = 60.0 / period; // HR=60/T
+				MaxStruct.heartRate = roundf(HR);
+			}
+		} else
+			MaxStruct.heartRate = 0;
+	} else
+		MaxStruct.heartRate = 0;
 	/**********Calculating SPO2***********/
 	// Calibration array // SaO2 Look-up Table(http://www.ti.com/lit/an/slaa274b/slaa274b.pdf)
-	uint8_t spO2LUT [43]={100,100,100,100,99,99,99,99,99,99,98,98,98,98,98,97,97,97,97,97,97,96,96,96,96,96,96,95,95,95,95,95,95,94,94,94,94,94,93,93,93,93,93};
-	float irACSqSum=0, redACSqSum=0;
-	uint8_t SPO2Iindex=0, ratio=0, SPO2Value;
-	if(MaxStruct.mode == SPO2_MODE)
-	{
-	    if (HR !=0 )
-	    {
-	        for (uint16_t i=peakInd1; i<=peakInd3; i++)
-	        {
-	        	irACSqSum = irACSqSum + (irRemovedDC[i] * irRemovedDC[i]);
-	        	redACSqSum = redACSqSum + (redRemovedDC[i] * redRemovedDC[i]);
-	        }
-	        ratio = roundf(100.0 * log(redACSqSum/samplesP1_P3) / log(irACSqSum/samplesP1_P3));
-	        if(ratio > 66)
-	        	SPO2Iindex = ratio - 66;
-	        else if (ratio > 50)
-	        	SPO2Iindex = ratio - 50;
-	        SPO2Value = spO2LUT[SPO2Iindex];
-	        if(SPO2Value >= 93 && SPO2Value <= 100)
-	        	MaxStruct.SPO2 = SPO2Value;
-	        else
-	        	MaxStruct.SPO2 = 0;
-	    }
-	    else MaxStruct.SPO2 = 0;
+	uint8_t spO2LUT[43] = { 100, 100, 100, 100, 99, 99, 99, 99, 99, 99, 98, 98,
+			98, 98, 98, 97, 97, 97, 97, 97, 97, 96, 96, 96, 96, 96, 96, 95, 95,
+			95, 95, 95, 95, 94, 94, 94, 94, 94, 93, 93, 93, 93, 93 };
+	float irACSqSum = 0, redACSqSum = 0;
+	uint8_t SPO2Iindex = 0, ratio = 0, SPO2Value;
+
+	if (MaxStruct.mode == SPO2_MODE) {
+		if (HR != 0) {
+			for (uint16_t i = peakInd1; i <= peakInd3; i++) {
+				irACSqSum = irACSqSum + (irRemovedDC[i] * irRemovedDC[i]);
+				redACSqSum = redACSqSum + (redRemovedDC[i] * redRemovedDC[i]);
+			}
+			ratio = roundf(100.0 * log(redACSqSum / samplesP1_P3) / log(irACSqSum / samplesP1_P3));
+			if (ratio > 66)
+				SPO2Iindex = ratio - 66;
+
+			else if (ratio > 50)
+				SPO2Iindex = ratio - 50;
+
+			SPO2Value = spO2LUT[SPO2Iindex];
+			if (SPO2Value >= 93 && SPO2Value <= 100)
+				MaxStruct.SPO2 = SPO2Value;
+
+			else
+				MaxStruct.SPO2 = 0;
+
+		} else
+			MaxStruct.SPO2 = 0;
 	}
 
-    MaxStruct.processEndTick = HAL_GetTick();
-    MaxStruct.processTimeMs = MaxStruct.processEndTick - MaxStruct.processStartTick;
+	MaxStruct.processEndTick = HAL_GetTick();
+	MaxStruct.processTimeMs = MaxStruct.processEndTick - MaxStruct.processStartTick;
 }
 
-/*-----------------------------------------------------------*/
-// This function should put within external interrupt function
-void Read_Data_When_Interrupt()
-{
+/***************************************************************************/
+/* This function should put within external interrupt function */
+void Read_Data_When_Interrupt() {
 	uint8_t interruptReg = 0;
+
 	MAX30100_Read(MAX30100_INTERRUPT_ADDR, &interruptReg, 1, 100);
-	// if Samples FIFO Buffer is full (A_Full==1)
-	if ( (interruptReg & MAX30100_INTERRUPT_A_FULL_MASK) >> MAX30100_INTERRUPT_A_FULL_POSITION )
-	{
+
+	/* if Samples FIFO Buffer is full (A_Full==1) */
+	if ((interruptReg & MAX30100_INTERRUPT_A_FULL_MASK)
+			>> MAX30100_INTERRUPT_A_FULL_POSITION) {
 		MAX30100_Read_FIFO(MaxStruct);
 		MaxStruct.dataReadingFlag1 = 1;
 		MaxStruct.dataReadingFlag2 = 1;
 	}
 }
 
-/*-----------------------------------------------------------*/
-void Oxymeter_Calculating_HR_SPO2()
-{
+/***************************************************************************/
+void Oxymeter_Calculating_HR_SPO2() {
 	Oxymeter_Detect_Finger(MaxStruct);
-	if (MaxStruct.fingerState == FINGER_STATE_DETECTED)
-	{
+
+	if (MaxStruct.fingerState == FINGER_STATE_DETECTED) {
 		Oxymeter_Add_Samples_To_Buffers(MaxStruct);
 		Oxymeter_Modify_Led_Current_Bias(MaxStruct);
 	}
+
 	if (MaxStruct.bufferIndex == OXYMETER_MAX_BUFFER_SIZE)  // buffer is full
-			Oxymeter_Signal_Processing(MaxStruct);
+		Oxymeter_Signal_Processing(MaxStruct);
 }
 
-/* -----------------------------------------------------------------------
- |								  APIs							          |
-/* -----------------------------------------------------------------------
- */
-/*
- * @brief: initialize MAX30100
- * @retval: status
- */
-Module_Status Init_MAX30100(void)
-{
+/***************************************************************************/
+/* initialize MAX30100 */
+Module_Status Init_MAX30100(void) {
 	uint8_t status = H2BR1_OK;
 	uint8_t mode = SPO2_MODE;
+	uint8_t interruptReg = 0;
 
-		MAX30100_Set_Led_Current(MAX30100_LED_CURRENT_33P8, MAX30100_LED_CURRENT_50P0); // primary values of RedLed 33.8 mA and IrLed 50mA so that received light intensity (from Red and Ir) is nearly adjacent but it is different from finger to other..
-		MAX30100_Set_Led_PulseWidth(MAX30100_LED_PW_1600);
-		MAX30100_Set_SpO2_SampleRate(MAX30100_SPO2_SR_100);
-		MAX30100_Set_Mode(mode);
-		uint8_t interruptReg = 0;
-		if (MAX30100_Read(MAX30100_INTERRUPT_ADDR, &interruptReg, 1, 100) == H2BR1_OK) // InterruptReg should be read firstly so that interrupt pin goes 'high'. When max30100 is booted interrupt pin is 'low'
-			status = H2BR1_OK;
-	    else
-		    status = H2BR1_ERR_WRONGPARAMS;
+	/* primary values of RedLed 33.8 mA and IrLed 50mA so that received light intensity
+	 * (from Red and Ir) is nearly adjacent but it is different from finger to other.. */
+	MAX30100_Set_Led_Current(MAX30100_LED_CURRENT_33P8, MAX30100_LED_CURRENT_50P0);
+	MAX30100_Set_Led_PulseWidth(MAX30100_LED_PW_1600);
+	MAX30100_Set_SpO2_SampleRate(MAX30100_SPO2_SR_100);
+	MAX30100_Set_Mode(mode);
+
+	/* InterruptReg should be read firstly so that interrupt pin goes 'high'
+	 * When max30100 is booted interrupt pin is 'low' */
+	if (MAX30100_Read(MAX30100_INTERRUPT_ADDR, &interruptReg, 1, 100) == H2BR1_OK)
+		status = H2BR1_OK;
+	else
+		status = H2BR1_ERR_WRONGPARAMS;
+
 	return status;
-}
-
-/*-----------------------------------------------------------*/
-/*
- * @brief  Streams heart rate (HR) or oxygen saturation (SPO2) samples to the terminal.
- * @param  dstPort: The port number used for data transmission.
- * @param  mode: The mode of operation (HR_MODE for heart rate, SPO2_MODE for oxygenation).
- * @retval Module_Status indicating success or failure of the operation.
- */
-Module_Status SampleToTerminal(uint8_t dstPort, MAX30100_MODE mode)
-{
-    Module_Status status = H2BR1_OK;   /* Initialize operation status as success */
-    char formattedString[20];          /* Buffer for formatted output string */
-
-    /* Validate the port number */
-    if (dstPort == 0)
-    {
-        return H2BR1_ERR_WRONGPARAMS;  /* Return error for invalid port */
-    }
-
-    /* Process data based on the selected mode */
-    switch (mode)
-    {
-        case HR_MODE:
-            /* Check if new IR data is available */
-            if (MaxStruct.dataReadingFlag1 == 1)
-            {
-                MaxStruct.dataReadingFlag1 = 0;
-
-                /* Loop through IR samples and send them to the terminal */
-                for (uint8_t i = 0; i < MAX30100_FIFO_SAMPLES_SIZE; i++)
-                {
-                    snprintf(formattedString, sizeof(formattedString), "i%d\r\n", MaxStruct.irSamples[i]);
-                    HAL_UART_Transmit(GetUart(dstPort), (uint8_t*)formattedString, strlen(formattedString), 100);
-                }
-            }
-            break;
-
-        case SPO2_MODE:
-            /* Check if new IR and RED data is available */
-            if (MaxStruct.dataReadingFlag1 == 1)
-            {
-                MaxStruct.dataReadingFlag1 = 0;
-
-                /* Loop through IR and RED samples and send them to the terminal */
-                for (uint8_t i = 0; i < MAX30100_FIFO_SAMPLES_SIZE; i++)
-                {
-                    snprintf(formattedString, sizeof(formattedString), "i%dr%d\r\n", MaxStruct.irSamples[i], MaxStruct.redSamples[i]);
-                    HAL_UART_Transmit(GetUart(dstPort), (uint8_t*)formattedString, strlen(formattedString), 100);
-                }
-            }
-            break;
-
-        default:
-            status = H2BR1_ERR_WRONGPARAMS; /* Return error for invalid mode */
-            break;
-    }
-
-    /* Return final status indicating success or prior error */
-    return status;
-}
-
-/*-----------------------------------------------------------*/
-/*
- * @brief: reads infrared samples from MaxStruct and stores them in the provided buffer.
- * (Note: You can use them specifically to draw the signal).
- * @param1: pointer to an array to store the infrared samples (16 samples).
- * @retval: status
- */
-Module_Status HR_ReadBuffer(uint16_t *irSampleBuffer)
-{
-	uint8_t status = H2BR1_OK;
-	for(uint8_t i = 0; i < MAX30100_FIFO_SAMPLES_SIZE; i++)
-		irSampleBuffer[i] = MaxStruct.irSamples[i];
-	return status;
-}
-
-/*-----------------------------------------------------------*/
-/*
- * @brief: reads red and infrared samples from MaxStruct and stores them in the provided buffers.
- * (Note: You can use them specifically to draw the signal).
- * @param1: pointer to an array to store red samples (16 samples).
- * @param2: pointer to an array to store infrared samples (16 samples).
- * @retval: status
- */
-Module_Status SPO2_ReadBuffer(uint16_t *redSampleBuffer, uint16_t *irSampleBuffer)
-{
-	uint8_t status = H2BR1_OK;
-	for(uint8_t i = 0; i < MAX30100_FIFO_SAMPLES_SIZE; i++)
-	{
-		redSampleBuffer[i] = MaxStruct.redSamples[i];
-		irSampleBuffer[i] = MaxStruct.irSamples[i];
-	}
-	return status;
-}
-
-/*-----------------------------------------------------------*/
-/*
- * @brief: Sample Read Flag for IC MAX30100
- * @param1: pointer to a buffer to store value it always gives 1
- * @retval: status
- */
-Module_Status SampleReadFlag(uint8_t *sampleReadFlag)
-{
-	uint8_t status = H2BR1_OK;
-	*sampleReadFlag = MaxStruct.dataReadingFlag2;
-	return status;
-}
-
-/*-----------------------------------------------------------*/
-/*
- * @brief: Reset Sample Read Flag for IC MAX30100
- * @retval: status
- */
-Module_Status ResetSampleReadFlag()
-{
-	uint8_t status = H2BR1_OK;
-	MaxStruct.dataReadingFlag2 = 0;
-	return status;
-}
-
-/*-----------------------------------------------------------*/
-/*
- * @brief: read the presence of a finger on or near the sensor.
- * @param1: pointer to a buffer to store value.
- * @retval: status
- */
-Module_Status FingerState(FINGER_STATE *fingerState)
-{
-	uint8_t status = H2BR1_OK;
-	*fingerState = MaxStruct.fingerState;
-	return status;
-}
-
-/*-----------------------------------------------------------*/
-/*
- * @brief: read heart rate after 6 seconds from placing the hand on the sensor.
- * @param1: pointer to a buffer to store value
- * @retval: status
- */
-Module_Status HR_Sample(uint8_t *heartRate)
-{
-	uint8_t status = H2BR1_OK;
-	*heartRate = MaxStruct.heartRate;
-	return status;
-}
-
-/*-----------------------------------------------------------*/
-/*
- * @brief: read oxygenation rate after 6 seconds from placing the hand on the sensor.
- * @param1: pointer to a buffer to store value
- * @retval: status
- */
-Module_Status SPO2_Sample(uint8_t *SPO2)
-{
-	uint8_t status = H2BR1_OK;
-	*SPO2 = MaxStruct.SPO2;
-	return status;
-}
-/*-----------------------------------------------------------*/
-/*
- * @brief  Samples data from a heart rate (HR) or oxygen saturation (SPO2) sensor
- *         and exports it to a specified port or module.
- * @param  dstModule: The module number to export data to.
- * @param  dstPort: The port number to export data to.
- * @param  sensorType: The type of sensor (HR for heart rate, SPO2 for oxygen saturation).
- * @retval Module_Status indicating success or failure of the operation.
- */
-Module_Status SampleToPort(uint8_t dstModule, uint8_t dstPort, Sensor dataFunction)
-{
-    uint8_t hrValue = 0;        /* Variable to store heart rate sample */
-    uint8_t spo2Value = 0;      /* Variable to store oxygen saturation sample */
-    Module_Status status = H2BR1_OK; /* Initialize operation status as success */
-
-    /* Validate the port and module ID */
-    if (dstPort == 0 && dstModule == myID)
-    {
-        return H2BR1_ERR_WRONGPARAMS; /* Return error for invalid parameters */
-    }
-
-    /* Process data based on the requested sensor type */
-    switch (dataFunction)
-    {
-        case HR:
-        {
-            /* Sample heart rate data */
-            status = HR_Sample(&hrValue);
-
-            /* If data is to be sent locally */
-            if (dstModule == myID || dstModule == 0)
-            {
-                writePxITMutex(dstPort, (char*)&hrValue, sizeof(uint8_t), 10);
-            }
-            else
-            {
-                /* Send data to another module */
-                MessageParams[1] = (status == H2BR1_OK) ? BOS_OK : BOS_ERROR;
-                MessageParams[0] = FMT_UINT8;
-                MessageParams[2] = 1;
-                MessageParams[3] = hrValue;
-
-                SendMessageToModule(dstModule, CODE_READ_RESPONSE, sizeof(uint8_t) + 3);
-            }
-            break;
-        }
-
-        case SPO2:
-        {
-            /* Sample oxygen saturation data */
-            status = SPO2_Sample(&spo2Value);
-
-            /* If data is to be sent locally */
-            if (dstModule == myID || dstModule == 0)
-            {
-                writePxITMutex(dstPort, (char*)&spo2Value, sizeof(uint8_t), 10);
-            }
-            else
-            {
-                /* Send data to another module */
-                MessageParams[1] = (status == H2BR1_OK) ? BOS_OK : BOS_ERROR;
-                MessageParams[0] = FMT_UINT8;
-                MessageParams[2] = 1;
-                MessageParams[3] = spo2Value;
-
-                SendMessageToModule(dstModule, CODE_READ_RESPONSE, sizeof(uint8_t) + 3);
-            }
-            break;
-        }
-
-        default:
-            status = H2BR1_ERR_WRONGPARAMS; /* Return error for invalid sensor type */
-            break;
-    }
-
-    /* Return final status indicating success or prior error */
-    return status;
 }
 
 /***************************************************************************/
-/*
- * brief: Streams data to the specified port and module with a given number of samples.
- * param targetModule: The target module to which data will be streamed.
- * param portNumber: The port number on the module.
- * param portFunction: Type of data that will be streamed (ACC, GYRO, MAG, or TEMP).
- * param numOfSamples: The number of samples to stream.
- * param streamTimeout: The interval (in milliseconds) between successive data transmissions.
- * retval: of type Module_Status indicating the success or failure of the operation.
+/* Streams heart rate (HR) or oxygen saturation (SPO2) samples to the terminal.
+ * dstPort: The port number used for data transmission.
+ * mode: The mode of operation (HR_MODE for heart rate, SPO2_MODE for oxygenation).
  */
-Module_Status StreamToPort(uint8_t dstModule,uint8_t dstPort,Sensor dataFunction,uint32_t numOfSamples,uint32_t streamTimeout)
- {
-	Module_Status Status = H2BR1_OK;
+Module_Status SampleToTerminal(uint8_t dstPort, MAX30100_MODE mode) {
+	Module_Status status = H2BR1_OK; /* Initialize operation status as success */
+	char formattedString[20]; /* Buffer for formatted output string */
 
-	uint32_t SamplePeriod = 0u;
+	/* Validate the port number */
+	if (dstPort == 0)
+		return H2BR1_ERR_WRONGPARAMS; /* Return error for invalid port */
 
-	/* Check timer handle and timeout validity */
-	if ((NULL == xTimerStream) || (0 == streamTimeout) || (0 == numOfSamples)) {
-		return H2BR1_ERROR; /* Assuming H2BR1_ERROR is defined in Module_Status */
-	}
-
-	/* Set streaming parameters */
-	StreamMode = STREAM_MODE_TO_PORT;
-	PortModule =dstModule;
-	PortNumber =dstPort;
-	PortFunction =dataFunction;
-	PortNumOfSamples =numOfSamples;
-	/* Calculate the period from timeout and number of samples */
-	SamplePeriod = streamTimeout / numOfSamples;
-
-	/* Stop (Reset) the TimerStream if it's already running */
-	if (xTimerIsTimerActive(xTimerStream)) {
-		if (pdFAIL == xTimerStop(xTimerStream, 100)) {
-			return H2BR1_ERROR;
+	/* Process data based on the selected mode */
+	switch (mode) {
+	case HR_MODE:
+		/* Check if new IR data is available */
+		if (MaxStruct.dataReadingFlag1 == 1) {
+			MaxStruct.dataReadingFlag1 = 0;
+			/* Loop through IR samples and send them to the terminal */
+			for (uint8_t i = 0; i < MAX30100_FIFO_SAMPLES_SIZE; i++) {
+				snprintf(formattedString, sizeof(formattedString), "i%d\r\n", MaxStruct.irSamples[i]);
+				HAL_UART_Transmit(GetUart(dstPort), (uint8_t*) formattedString, strlen(formattedString), 100);
+			}
 		}
+		break;
+
+	case SPO2_MODE:
+		/* Check if new IR and RED data is available */
+		if (MaxStruct.dataReadingFlag1 == 1) {
+			MaxStruct.dataReadingFlag1 = 0;
+			/* Loop through IR and RED samples and send them to the terminal */
+			for (uint8_t i = 0; i < MAX30100_FIFO_SAMPLES_SIZE; i++) {
+				snprintf(formattedString, sizeof(formattedString), "i%dr%d\r\n", MaxStruct.irSamples[i], MaxStruct.redSamples[i]);
+				HAL_UART_Transmit(GetUart(dstPort), (uint8_t*) formattedString, strlen(formattedString), 100);
+			}
+		}
+		break;
+
+	default:
+		status = H2BR1_ERR_WRONGPARAMS;
+		break;
 	}
 
-	/* Start the stream timer */
-	if (pdFAIL == xTimerStart(xTimerStream, 100)) {
-		return H2BR1_ERROR;
-	}
-
-	/* Update timer timeout - This also restarts the timer */
-	if (pdFAIL == xTimerChangePeriod(xTimerStream, SamplePeriod, 100)) {
-		return H2BR1_ERROR;
-	}
-
-	return Status;
+	return status;
 }
 
 /***************************************************************************/
-/*
- * brief: Streams data to the specified terminal port with a given number of samples.
- * param targetPort: The port number on the terminal.
- * param dataFunction: Type of data that will be streamed (ACC, GYRO, MAG, or TEMP).
- * param numOfSamples: The number of samples to stream.
- * param streamTimeout: The interval (in milliseconds) between successive data transmissions.
- * retval: of type Module_Status indicating the success or failure of the operation.
- */
-Module_Status StreamToTerminal(uint8_t dstPort,MAX30100_MODE dataFunction,uint32_t numOfSamples,uint32_t streamTimeout)
-{
-	Module_Status Status =H2BR1_OK;
-	uint32_t SamplePeriod =0u;
-	/* Check timer handle and timeout validity */
-	if((NULL == xTimerStream) || (0 == streamTimeout) || (0 == numOfSamples)){
-		return H2BR1_ERROR; /* Assuming H2BR1_ERROR is defined in Module_Status */
-	}
-
-	/* Set streaming parameters */
-		StreamMode = STREAM_MODE_TO_TERMINAL;
-		TerminalPort =dstPort;
-		TerminalFunction =dataFunction;
-		TerminalTimeout =streamTimeout;
-		TerminalNumOfSamples =numOfSamples;
-
-	/* Calculate the period from timeout and number of samples */
-	SamplePeriod =streamTimeout / numOfSamples;
-
-	/* Stop (Reset) the TimerStream if it's already running */
-	if(xTimerIsTimerActive(xTimerStream)){
-		if(pdFAIL == xTimerStop(xTimerStream,100)){
-			return H2BR1_ERROR;
-		}
-	}
-
-	/* Start the stream timer */
-	if(pdFAIL == xTimerStart(xTimerStream,100)){
-		return H2BR1_ERROR;
-	}
-
-	/* Update timer timeout - This also restarts the timer */
-	if(pdFAIL == xTimerChangePeriod(xTimerStream,SamplePeriod,100)){
-		return H2BR1_ERROR;
-	}
-
-	return Status;
+void SampleHRToString(char *cstring, size_t maxLen) {
+	uint8_t heartRate;
+	HR_Sample(&heartRate);
+	snprintf(cstring, maxLen, "HeartRate: %d \r\n", heartRate);
 }
 
-/*-----------------------------------------------------------*/
-static Module_Status PollingSleepCLISafe(uint32_t period, long Numofsamples)
-{
-	const unsigned DELTA_SLEEP_MS = 100; // milliseconds
-	long numDeltaDelay =  period / DELTA_SLEEP_MS;
+/***************************************************************************/
+void SampleSPO2ToString(char *cstring, size_t maxLen) {
+	uint8_t SPO2;
+	SPO2_Sample(&SPO2);
+	snprintf(cstring, maxLen, "SPO2: %d \r\n", SPO2);
+}
+
+/***************************************************************************/
+Module_Status StreamToCLI(uint32_t Numofsamples, uint32_t timeout,Sensor Sensor) {
+
+	switch (Sensor) {
+	case HR:
+		StreamMemsToCLI(Numofsamples, timeout, SampleHRToString);
+		break;
+
+	case SPO2:
+		StreamMemsToCLI(Numofsamples, timeout, SampleSPO2ToString);
+		break;
+
+	default:
+		break;
+	}
+
+}
+
+/***************************************************************************/
+static Module_Status PollingSleepCLISafe(uint32_t period, long Numofsamples) {
+	const unsigned DELTA_SLEEP_MS = 100;
+	long numDeltaDelay = period / DELTA_SLEEP_MS;
 	unsigned lastDelayMS = period % DELTA_SLEEP_MS;
 
 	while (numDeltaDelay-- > 0) {
 		vTaskDelay(pdMS_TO_TICKS(DELTA_SLEEP_MS));
 
-		// Look for ENTER key to stop the stream
-		for (uint8_t chr=1 ; chr<MSG_RX_BUF_SIZE ; chr++)
-		{
-			if (UARTRxBuf[pcPort-1][chr] == '\r') {
-				UARTRxBuf[pcPort-1][chr] = 0;
-				flag=1;
+		/* Look for ENTER key to stop the stream */
+		for (uint8_t chr = 1; chr < MSG_RX_BUF_SIZE; chr++) {
+			if (UARTRxBuf[pcPort - 1][chr] == '\r') {
+				UARTRxBuf[pcPort - 1][chr] = 0;
+				flag = 1;
 				return H2BR1_ERR_TERMINATED;
 			}
 		}
@@ -1433,158 +1169,353 @@ static Module_Status PollingSleepCLISafe(uint32_t period, long Numofsamples)
 	vTaskDelay(pdMS_TO_TICKS(lastDelayMS));
 	return H2BR1_OK;
 }
-/*-----------------------------------------------------------*/
-static Module_Status StreamMemsToCLI(uint32_t Numofsamples, uint32_t timeout, SampleMemsToString function)
-{
+
+/***************************************************************************/
+static Module_Status StreamMemsToCLI(uint32_t Numofsamples, uint32_t timeout, SampleMemsToString function) {
 	Module_Status status = H2BR1_OK;
 	int8_t *pcOutputString = NULL;
 	uint32_t period = timeout / Numofsamples;
+	long numTimes = timeout / period;
+
 	if (period < MIN_MEMS_PERIOD_MS)
 		return H2BR1_ERR_WrongParams;
 
-	// TODO: Check if CLI is enable or not
 	for (uint8_t chr = 0; chr < MSG_RX_BUF_SIZE; chr++) {
-			if (UARTRxBuf[pcPort - 1][chr] == '\r' ) {
-				UARTRxBuf[pcPort - 1][chr] = 0;
-			}
+		if (UARTRxBuf[pcPort - 1][chr] == '\r') {
+			UARTRxBuf[pcPort - 1][chr] = 0;
 		}
+	}
+
 	if (1 == flag) {
 		flag = 0;
 		static char *pcOKMessage = (int8_t*) "Stop stream !\n\r";
 		writePxITMutex(pcPort, pcOKMessage, strlen(pcOKMessage), 10);
 		return status;
 	}
+
 	if (period > timeout)
 		timeout = period;
 
-	long numTimes = timeout / period;
 	stopStream = false;
 
 	while ((numTimes-- > 0) || (timeout >= MAX_MEMS_TIMEOUT_MS)) {
 		pcOutputString = FreeRTOS_CLIGetOutputBuffer();
-		function((char *)pcOutputString, 100);
+		function((char*) pcOutputString, 100);
 
-
-		writePxMutex(pcPort, (char *)pcOutputString, strlen((char *)pcOutputString), cmd500ms, HAL_MAX_DELAY);
-		if (PollingSleepCLISafe(period,Numofsamples) != H2BR1_OK)
+		writePxMutex(pcPort, (char*) pcOutputString, strlen((char*) pcOutputString), cmd500ms, HAL_MAX_DELAY);
+		if (PollingSleepCLISafe(period, Numofsamples) != H2BR1_OK)
 			break;
 	}
 
-	memset((char *) pcOutputString, 0, configCOMMAND_INT_MAX_OUTPUT_SIZE);
-  sprintf((char *)pcOutputString, "\r\n");
+	memset((char*) pcOutputString, 0, configCOMMAND_INT_MAX_OUTPUT_SIZE);
+	sprintf((char*) pcOutputString, "\r\n");
+
 	return status;
 }
 
-void SampleHRToString(char *cstring, size_t maxLen) {
-	uint8_t heartRate;
-	HR_Sample(&heartRate);
-	snprintf(cstring, maxLen, "HeartRate: %d \r\n", heartRate);
-}
-/*-----------------------------------------------------------*/
-void SampleSPO2ToString(char *cstring, size_t maxLen) {
-	uint8_t SPO2;
-	SPO2_Sample(&SPO2);
-	snprintf(cstring, maxLen, "SPO2: %d \r\n", SPO2);
-}
-/*-----------------------------------------------------------*/
-Module_Status StreamToCLI(uint32_t Numofsamples, uint32_t timeout,
-		Sensor Sensor) {
+/***************************************************************************/
+/***************************** General Functions ***************************/
+/***************************************************************************/
+/* reads infrared samples from MaxStruct and stores them in the provided buffer.
+ * (Note: You can use them specifically to draw the signal).
+ * irSampleBuffer: pointer to an array to store the infrared samples (16 samples).
+ */
+Module_Status HR_ReadBuffer(uint16_t *irSampleBuffer) {
+	uint8_t status = H2BR1_OK;
 
-	switch (Sensor) {
+	for (uint8_t i = 0; i < MAX30100_FIFO_SAMPLES_SIZE; i++)
+		irSampleBuffer[i] = MaxStruct.irSamples[i];
+
+	return status;
+}
+
+/***************************************************************************/
+/* reads red and infrared samples from MaxStruct and stores them in the provided buffers.
+ * (Note: You can use them specifically to draw the signal).
+ * redSampleBuffer: pointer to an array to store red samples (16 samples).
+ * irSampleBuffer: pointer to an array to store infrared samples (16 samples).
+ */
+Module_Status SPO2_ReadBuffer(uint16_t *redSampleBuffer, uint16_t *irSampleBuffer) {
+	uint8_t status = H2BR1_OK;
+
+	for (uint8_t i = 0; i < MAX30100_FIFO_SAMPLES_SIZE; i++) {
+		redSampleBuffer[i] = MaxStruct.redSamples[i];
+		irSampleBuffer[i] = MaxStruct.irSamples[i];
+	}
+
+	return status;
+}
+
+/***************************************************************************/
+/* Sample Read Flag for IC MAX30100
+ * sampleReadFlag: pointer to a buffer to store value it always gives 1
+ */
+Module_Status SampleReadFlag(uint8_t *sampleReadFlag) {
+	uint8_t status = H2BR1_OK;
+
+	*sampleReadFlag = MaxStruct.dataReadingFlag2;
+
+	return status;
+}
+
+/***************************************************************************/
+/* Reset Sample Read Flag for IC MAX30100 */
+Module_Status ResetSampleReadFlag(void) {
+	uint8_t status = H2BR1_OK;
+
+	MaxStruct.dataReadingFlag2 = 0;
+
+	return status;
+}
+
+/***************************************************************************/
+/* read the presence of a finger on or near the sensor.
+ * fingerState: pointer to a buffer to store value.
+ */
+Module_Status FingerState(FINGER_STATE *fingerState) {
+	uint8_t status = H2BR1_OK;
+
+	*fingerState = MaxStruct.fingerState;
+
+	return status;
+}
+
+/***************************************************************************/
+/* read heart rate after 6 seconds from placing the hand on the sensor.
+ * heartRate: pointer to a buffer to store value
+ */
+Module_Status HR_Sample(uint8_t *heartRate) {
+	uint8_t status = H2BR1_OK;
+
+	*heartRate = MaxStruct.heartRate;
+
+	return status;
+}
+
+/***************************************************************************/
+/* read oxygenation rate after 6 seconds from placing the hand on the sensor.
+ * SPO2: pointer to a buffer to store value
+ */
+Module_Status SPO2_Sample(uint8_t *SPO2) {
+	uint8_t status = H2BR1_OK;
+
+	*SPO2 = MaxStruct.SPO2;
+
+	return status;
+}
+
+/***************************************************************************/
+/* Samples data from a heart rate (HR) or oxygen saturation (SPO2) sensor
+ * and exports it to a specified port or module.
+ * dstModule: dstModule: The module number to export data to.
+ * dstPort: dstPort: The port number to export data to.
+ * dataFunction: sensorType: The type of sensor (HR for heart rate, SPO2 for oxygen saturation).
+ */
+Module_Status SampleToPort(uint8_t dstModule, uint8_t dstPort, Sensor dataFunction) {
+	uint8_t hrValue = 0; /* Variable to store heart rate sample */
+	uint8_t spo2Value = 0; /* Variable to store oxygen saturation sample */
+	Module_Status status = H2BR1_OK; /* Initialize operation status as success */
+
+	/* Validate the port and module ID */
+	if (dstPort == 0 && dstModule == myID)
+		return H2BR1_ERR_WRONGPARAMS;
+
+	/* Process data based on the requested sensor type */
+	switch (dataFunction) {
 	case HR:
-		StreamMemsToCLI(Numofsamples, timeout, SampleHRToString);
+		/* Sample heart rate data */
+		status = HR_Sample(&hrValue);
+
+		/* If data is to be sent locally */
+		if (dstModule == myID || dstModule == 0)
+			writePxITMutex(dstPort, (char*) &hrValue, sizeof(uint8_t), 10);
+		else {
+			/* Send data to another module */
+			MessageParams[1] = (status == H2BR1_OK) ? BOS_OK : BOS_ERROR;
+			MessageParams[0] = FMT_UINT8;
+			MessageParams[2] = 1;
+			MessageParams[3] = hrValue;
+			SendMessageToModule(dstModule, CODE_READ_RESPONSE,
+					sizeof(uint8_t) + 3);
+		}
 		break;
+
 	case SPO2:
-		StreamMemsToCLI(Numofsamples, timeout, SampleSPO2ToString);
+		/* Sample oxygen saturation data */
+		status = SPO2_Sample(&spo2Value);
+
+		/* If data is to be sent locally */
+		if (dstModule == myID || dstModule == 0)
+			writePxITMutex(dstPort, (char*) &spo2Value, sizeof(uint8_t), 10);
+		else {
+			/* Send data to another module */
+			MessageParams[1] = (status == H2BR1_OK) ? BOS_OK : BOS_ERROR;
+			MessageParams[0] = FMT_UINT8;
+			MessageParams[2] = 1;
+			MessageParams[3] = spo2Value;
+			SendMessageToModule(dstModule, CODE_READ_RESPONSE, sizeof(uint8_t) + 3);
+		}
 		break;
+
 	default:
+		status = H2BR1_ERR_WRONGPARAMS;
 		break;
 	}
 
+	return status;
 }
 
-/* -----------------------------------------------------------------------
- |								Commands							      |
-   -----------------------------------------------------------------------
+/***************************************************************************/
+/* Streams data to the specified port and module with a given number of samples.
+ * targetModule: The target module to which data will be streamed.
+ * portNumber: The port number on the module.
+ * portFunction: Type of data that will be streamed (ACC, GYRO, MAG, or TEMP).
+ * numOfSamples: The number of samples to stream.
+ * streamTimeout: The interval (in milliseconds) between successive data transmissions.
  */
-portBASE_TYPE StreamEXGCommand(int8_t *pcWriteBuffer, size_t xWriteBufferLen, const int8_t *pcCommandString)
-{
+Module_Status StreamToPort(uint8_t dstModule, uint8_t dstPort, Sensor dataFunction, uint32_t numOfSamples, uint32_t streamTimeout) {
+	Module_Status Status = H2BR1_OK;
+	uint32_t SamplePeriod = 0u;
+
+	/* Check timer handle and timeout validity */
+	if ((NULL == xTimerStream) || (0 == streamTimeout) || (0 == numOfSamples))
+		return H2BR1_ERROR;
+
+	/* Set streaming parameters */
+	StreamMode = STREAM_MODE_TO_PORT;
+	PortModule = dstModule;
+	PortNumber = dstPort;
+	PortFunction = dataFunction;
+	PortNumOfSamples = numOfSamples;
+	/* Calculate the period from timeout and number of samples */
+	SamplePeriod = streamTimeout / numOfSamples;
+
+	/* Stop (Reset) the TimerStream if it's already running */
+	if (xTimerIsTimerActive(xTimerStream)) {
+		if (pdFAIL == xTimerStop(xTimerStream, 100))
+			return H2BR1_ERROR;
+	}
+
+	/* Start the stream timer */
+	if (pdFAIL == xTimerStart(xTimerStream, 100))
+		return H2BR1_ERROR;
+
+	/* Update timer timeout - This also restarts the timer */
+	if (pdFAIL == xTimerChangePeriod(xTimerStream, SamplePeriod, 100))
+		return H2BR1_ERROR;
+
+	return Status;
+}
+
+/***************************************************************************/
+/* Streams data to the specified terminal port with a given number of samples.
+ * targetPort: The port number on the terminal.
+ * dataFunction: Type of data that will be streamed (ACC, GYRO, MAG, or TEMP).
+ * numOfSamples: The number of samples to stream.
+ * streamTimeout: The interval (in milliseconds) between successive data transmissions.
+ */
+Module_Status StreamToTerminal(uint8_t dstPort, MAX30100_MODE dataFunction, uint32_t numOfSamples, uint32_t streamTimeout) {
+	Module_Status Status = H2BR1_OK;
+	uint32_t SamplePeriod = 0u;
+
+	/* Check timer handle and timeout validity */
+	if ((NULL == xTimerStream) || (0 == streamTimeout) || (0 == numOfSamples))
+		return H2BR1_ERROR;
+
+	/* Set streaming parameters */
+	StreamMode = STREAM_MODE_TO_TERMINAL;
+	TerminalPort = dstPort;
+	TerminalFunction = dataFunction;
+	TerminalTimeout = streamTimeout;
+	TerminalNumOfSamples = numOfSamples;
+
+	/* Calculate the period from timeout and number of samples */
+	SamplePeriod = streamTimeout / numOfSamples;
+
+	/* Stop (Reset) the TimerStream if it's already running */
+	if (xTimerIsTimerActive(xTimerStream)) {
+		if (pdFAIL == xTimerStop(xTimerStream, 100))
+			return H2BR1_ERROR;
+	}
+
+	/* Start the stream timer */
+	if (pdFAIL == xTimerStart(xTimerStream, 100))
+		return H2BR1_ERROR;
+
+	/* Update timer timeout - This also restarts the timer */
+	if (pdFAIL == xTimerChangePeriod(xTimerStream, SamplePeriod, 100))
+		return H2BR1_ERROR;
+
+	return Status;
+}
+
+/***************************************************************************/
+/********************************* Commands ********************************/
+/***************************************************************************/
+portBASE_TYPE StreamSPO2Command(int8_t *pcWriteBuffer, size_t xWriteBufferLen, const int8_t *pcCommandString) {
 	const char *const HRCmdName = "hr";
 	const char *const SPO2CmdName = "spo2";
-
-
-	uint32_t Numofsamples = 0;
-	uint32_t timeout = 0;
-	uint8_t port = 0;
-	uint8_t module = 0;
+	const char *pSensName = NULL;
 
 	bool portOrCLI = true; // Port Mode => false and CLI Mode => true
 
-	const char *pSensName = NULL;
+	uint8_t port = 0;
+	uint8_t module = 0;
+	uint32_t timeout = 0;
+	uint32_t Numofsamples = 0;
+
 	portBASE_TYPE sensNameLen = 0;
 
-	// Make sure we return something
+	/* Make sure we return something */
 	*pcWriteBuffer = '\0';
 
 	if (!StreamCommandParser(pcCommandString, &pSensName, &sensNameLen, &portOrCLI, &Numofsamples, &timeout, &port, &module)) {
-		snprintf((char *)pcWriteBuffer, xWriteBufferLen, "Invalid Arguments\r\n");
+		snprintf((char*) pcWriteBuffer, xWriteBufferLen, "Invalid Arguments\r\n");
 		return pdFALSE;
 	}
 
 	do {
 		if (!strncmp(pSensName, HRCmdName, strlen(HRCmdName))) {
-			if (portOrCLI) {
-
-				StreamToCLI(Numofsamples, timeout,HR);
-
-			} else {
-
+			if (portOrCLI)
+				StreamToCLI(Numofsamples, timeout, HR);
+			else
 				StreamToPort(module, port, HR, Numofsamples, timeout);
 
-			}
-
 		} else if (!strncmp(pSensName, SPO2CmdName, strlen(SPO2CmdName))) {
-			if (portOrCLI) {
+			if (portOrCLI)
 				StreamToCLI(Numofsamples, timeout, SPO2);
-
-			} else {
-
+			else
 				StreamToPort(module, port, SPO2, Numofsamples, timeout);
-			}
-
-
-
 		} else {
-			snprintf((char*) pcWriteBuffer, xWriteBufferLen,
-					"Invalid Arguments\r\n");
+			snprintf((char*) pcWriteBuffer, xWriteBufferLen, "Invalid Arguments\r\n");
 		}
 
 		snprintf((char*) pcWriteBuffer, xWriteBufferLen, "\r\n");
 		return pdFALSE;
+
 	} while (0);
 
-	snprintf((char *)pcWriteBuffer, xWriteBufferLen, "Error reading Sensor\r\n");
+	snprintf((char*) pcWriteBuffer, xWriteBufferLen, "Error reading Sensor\r\n");
+
 	return pdFALSE;
 }
 
+/***************************************************************************/
 static bool StreamCommandParser(const int8_t *pcCommandString, const char **ppSensName, portBASE_TYPE *pSensNameLen,
-														bool *pPortOrCLI, uint32_t *pPeriod, uint32_t *pTimeout, uint8_t *pPort, uint8_t *pModule)
-{
+		bool *pPortOrCLI, uint32_t *pPeriod, uint32_t *pTimeout, uint8_t *pPort, uint8_t *pModule) {
 	const char *pPeriodMSStr = NULL;
 	const char *pTimeoutMSStr = NULL;
-
-	portBASE_TYPE periodStrLen = 0;
-	portBASE_TYPE timeoutStrLen = 0;
-
 	const char *pPortStr = NULL;
 	const char *pModStr = NULL;
 
+	portBASE_TYPE periodStrLen = 0;
+	portBASE_TYPE timeoutStrLen = 0;
 	portBASE_TYPE portStrLen = 0;
 	portBASE_TYPE modStrLen = 0;
 
-	*ppSensName = (const char *)FreeRTOS_CLIGetParameter(pcCommandString, 1, pSensNameLen);
-	pPeriodMSStr = (const char *)FreeRTOS_CLIGetParameter(pcCommandString, 2, &periodStrLen);
-	pTimeoutMSStr = (const char *)FreeRTOS_CLIGetParameter(pcCommandString, 3, &timeoutStrLen);
+	*ppSensName = (const char*) FreeRTOS_CLIGetParameter(pcCommandString, 1, pSensNameLen);
+	pPeriodMSStr = (const char*) FreeRTOS_CLIGetParameter(pcCommandString, 2, &periodStrLen);
+	pTimeoutMSStr = (const char*) FreeRTOS_CLIGetParameter(pcCommandString, 3, &timeoutStrLen);
 
 	// At least 3 Parameters are required!
 	if ((*ppSensName == NULL) || (pPeriodMSStr == NULL) || (pTimeoutMSStr == NULL))
@@ -1595,12 +1526,12 @@ static bool StreamCommandParser(const int8_t *pcCommandString, const char **ppSe
 	*pTimeout = atoi(pTimeoutMSStr);
 	*pPortOrCLI = true;
 
-	pPortStr = (const char *)FreeRTOS_CLIGetParameter(pcCommandString, 4, &portStrLen);
-	pModStr = (const char *)FreeRTOS_CLIGetParameter(pcCommandString, 5, &modStrLen);
+	pPortStr = (const char*) FreeRTOS_CLIGetParameter(pcCommandString, 4, &portStrLen);
+	pModStr = (const char*) FreeRTOS_CLIGetParameter(pcCommandString, 5, &modStrLen);
 
 	if ((pModStr == NULL) && (pPortStr == NULL))
 		return true;
-	if ((pModStr == NULL) || (pPortStr == NULL))	// If user has provided 4 Arguments.
+	if ((pModStr == NULL) || (pPortStr == NULL))// If user has provided 4 Arguments.
 		return false;
 
 	*pPort = atoi(pPortStr);
@@ -1610,83 +1541,71 @@ static bool StreamCommandParser(const int8_t *pcCommandString, const char **ppSe
 	return true;
 }
 
-portBASE_TYPE CLI_HR_SampleCommand( int8_t *pcWriteBuffer, size_t xWriteBufferLen, const int8_t *pcCommandString ){
+/***************************************************************************/
+portBASE_TYPE CLI_HR_SampleCommand(int8_t *pcWriteBuffer, size_t xWriteBufferLen, const int8_t *pcCommandString) {
 	Module_Status status = H2BR1_OK;
-	uint8_t heartRate=0;
-	static const int8_t *pcOKMessage=(int8_t* )"Heart Rate is : %d bpm\n\r";
-	static const int8_t *pcErrorsMessage =(int8_t* )"Error Params!\n\r";
+	uint8_t heartRate = 0;
+	static const int8_t *pcOKMessage = (int8_t*) "Heart Rate is : %d bpm\n\r";
+	static const int8_t *pcErrorsMessage = (int8_t*) "Error Params!\n\r";
 
-		(void )xWriteBufferLen;
-		configASSERT(pcWriteBuffer);
+	(void) xWriteBufferLen;
+	configASSERT(pcWriteBuffer);
 
-	 	status=HR_Sample(&heartRate);
+	status = HR_Sample(&heartRate);
 
-	 if(status == H2BR1_OK)
-	 {
-			 sprintf((char* )pcWriteBuffer,(char* )pcOKMessage,heartRate);
+	if (status == H2BR1_OK)
+		sprintf((char*) pcWriteBuffer, (char*) pcOKMessage, heartRate);
 
-	 }
-
-	 else if(status == H2BR1_ERROR)
-			strcpy((char* )pcWriteBuffer,(char* )pcErrorsMessage);
-
+	else if (status == H2BR1_ERROR)
+		strcpy((char*) pcWriteBuffer, (char*) pcErrorsMessage);
 
 	return pdFALSE;
 
 }
-/*-----------------------------------------------------------*/
-portBASE_TYPE CLI_SPO2_SampleCommand( int8_t *pcWriteBuffer, size_t xWriteBufferLen, const int8_t *pcCommandString ){
+
+/***************************************************************************/
+portBASE_TYPE CLI_SPO2_SampleCommand(int8_t *pcWriteBuffer, size_t xWriteBufferLen, const int8_t *pcCommandString) {
 	Module_Status status = H2BR1_OK;
-	uint8_t oxygenationRate=0;
-	static const int8_t *pcOKMessage=(int8_t* )"Oxygenation Rate(SPO2) is : %d %%\n\r";
-	static const int8_t *pcErrorsMessage =(int8_t* )"Error Params!\n\r";
+	uint8_t oxygenationRate = 0;
+	static const int8_t *pcOKMessage = (int8_t*) "Oxygenation Rate(SPO2) is : %d %%\n\r";
+	static const int8_t *pcErrorsMessage = (int8_t*) "Error Params!\n\r";
 
-		(void )xWriteBufferLen;
-		configASSERT(pcWriteBuffer);
+	(void) xWriteBufferLen;
+	configASSERT(pcWriteBuffer);
 
-	 	status=SPO2_Sample(&oxygenationRate);
+	status = SPO2_Sample(&oxygenationRate);
 
-	 if(status == H2BR1_OK)
-	 {
-			 sprintf((char* )pcWriteBuffer,(char* )pcOKMessage,oxygenationRate);
+	if (status == H2BR1_OK)
+		sprintf((char*) pcWriteBuffer, (char*) pcOKMessage, oxygenationRate);
 
-	 }
-
-	 else if(status == H2BR1_ERROR)
-			strcpy((char* )pcWriteBuffer,(char* )pcErrorsMessage);
-
+	else if (status == H2BR1_ERROR)
+		strcpy((char*) pcWriteBuffer, (char*) pcErrorsMessage);
 
 	return pdFALSE;
 
 }
-/*-----------------------------------------------------------*/
-portBASE_TYPE CLI_FingerStateCommand( int8_t *pcWriteBuffer, size_t xWriteBufferLen, const int8_t *pcCommandString ){
+
+/***************************************************************************/
+portBASE_TYPE CLI_FingerStateCommand(int8_t *pcWriteBuffer,	size_t xWriteBufferLen, const int8_t *pcCommandString) {
 	Module_Status status = H2BR1_OK;
-	FINGER_STATE fingerState =0;
-	static const int8_t *pcOKMessage=(int8_t* )"FingerState is : %d \n\r";
-	static const int8_t *pcErrorsMessage =(int8_t* )"Error Params!\n\r";
+	FINGER_STATE fingerState = 0;
 
-		(void )xWriteBufferLen;
-		configASSERT(pcWriteBuffer);
+	static const int8_t *pcOKMessage = (int8_t*) "FingerState is : %d \n\r";
+	static const int8_t *pcErrorsMessage = (int8_t*) "Error Params!\n\r";
 
-	 	status=FingerState(&fingerState);
+	(void) xWriteBufferLen;
+	configASSERT(pcWriteBuffer);
 
-	 if(status == H2BR1_OK)
-	 {
-			 sprintf((char* )pcWriteBuffer,(char* )pcOKMessage,fingerState);
+	status = FingerState(&fingerState);
 
-	 }
+	if (status == H2BR1_OK)
+		sprintf((char*) pcWriteBuffer, (char*) pcOKMessage, fingerState);
 
-	 else if(status == H2BR1_ERROR)
-			strcpy((char* )pcWriteBuffer,(char* )pcErrorsMessage);
-
+	else if (status == H2BR1_ERROR)
+		strcpy((char*) pcWriteBuffer, (char*) pcErrorsMessage);
 
 	return pdFALSE;
-
 }
-/*-----------------------------------------------------------*/
 
-
-/*-----------------------------------------------------------*/
-
-/************************ (C) COPYRIGHT HEXABITZ *****END OF FILE****/
+/***************************************************************************/
+/***************** (C) COPYRIGHT HEXABITZ ***** END OF FILE ****************/
