@@ -1,45 +1,36 @@
 /*
- BitzOS (BOS) V0.3.6 - Copyright (C) 2017-2024 Hexabitz
+ BitzOS (BOS) V0.4.0 - Copyright (C) 2017-2025 Hexabitz
  All rights reserved
 
- File Name     : H05R0_i2c.h
- Description   :This file contains all the functions prototypes for
+ File Name          : H2BR1_i2c.h
+ Description        : This file contains all the functions prototypes for
  the i2c
 
  */
-/* Define to prevent recursive inclusion -------------------------------------*/
-#ifndef __I2C_H__
-#define __I2C_H__
 
+/* Define to prevent recursive inclusion ***********************************/
+#ifndef __i2c_H
+#define __i2c_H
 #ifdef __cplusplus
-extern "C" {
+ extern "C" {
 #endif
 
-/* Includes ------------------------------------------------------------------*/
-#include "BOS.h"
+/* Includes ****************************************************************/
+#include "stm32g0xx_hal.h"
 
-/* USER CODE BEGIN Includes */
-
-/* USER CODE END Includes */
-
+/* Exported Variables ******************************************************/
 extern I2C_HandleTypeDef hi2c2;
+
+/* Exported Functions ******************************************************/
+extern void MX_I2C_Init(void);
 
 extern Module_Status MAX30100_Write(uint8_t regAddr, uint8_t txData, uint32_t timeout);
 extern Module_Status MAX30100_Read(uint8_t regAddr, uint8_t *pRxData, uint8_t size, uint32_t timeout);
 
-/* USER CODE BEGIN Private defines */
-
-/* USER CODE END Private defines */
-
-void MX_I2C2_Init(void);
-
-/* USER CODE BEGIN Prototypes */
-
-/* USER CODE END Prototypes */
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* __I2C_H__ */
+#endif /*__i2c_H */
 
-/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
+ /***************** (C) COPYRIGHT HEXABITZ ***** END OF FILE ****************/

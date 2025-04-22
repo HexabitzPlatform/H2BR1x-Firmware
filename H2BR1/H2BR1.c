@@ -443,8 +443,11 @@ void Module_Peripheral_Init(void){
 	MX_USART3_UART_Init();
 	MX_USART5_UART_Init();
 	MX_USART6_UART_Init();
-	MX_I2C2_Init();
+
+    SPO2GPIOInit();
+	MX_I2C_Init();
 	Init_MAX30100();
+
 	 //Circulating DMA Channels ON All Module
 	for (int i = 1; i <= NumOfPorts; i++) {
 		if (GetUart(i) == &huart1) {
