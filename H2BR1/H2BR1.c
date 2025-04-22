@@ -1,5 +1,5 @@
 /*
- BitzOS (BOS) V0.3.6 - Copyright (C) 2017-2024 Hexabitz
+ BitzOS (BOS) V0.4.0 - Copyright (C) 2017-2025 Hexabitz
  All rights reserved
 
  File Name     : H2BR1.c
@@ -10,14 +10,14 @@
 >>
 >>
 >>
-
  */
 
-/* Includes ------------------------------------------------------------------*/
+/* Includes ****************************************************************/
 #include "BOS.h"
 #include "H2BR1_inputs.h"
 #include "H2BR1_i2c.h"
 
+/* Exported Typedef ******************************************************/
 /* Define UART variables */
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
@@ -25,46 +25,24 @@ UART_HandleTypeDef huart3;
 UART_HandleTypeDef huart5;
 UART_HandleTypeDef huart6;
 
-/* Exported variables */
-extern FLASH_ProcessTypeDef pFlash;
-extern uint8_t numOfRecordedSnippets;
-typedef void (*SampleMemsToString)(char *, size_t);
-/* Exported functions */
-
-//uint32_t lastTick;
-
-/* Module exported parameters ------------------------------------------------*/
-#define MIN_PERIOD_MS				100
-static bool StreamCommandParser(const int8_t *pcCommandString, const char **ppSensName, portBASE_TYPE *pSensNameLen,
-														bool *pPortOrCLI, uint32_t *pPeriod, uint32_t *pTimeout, uint8_t *pPort, uint8_t *pModule);
-
-/* Private variables ---------------------------------------------------------*/
-static bool stopStream = false;
+Sensor PortFunction;
 MAX30100_s MaxStruct;
-
-uint8_t flag ;
-
-
+MAX30100_MODE TerminalFunction;
 
 TimerHandle_t xTimerStream = NULL;
 
+/* Private Variables *******************************************************/
 /* Stream to port variables */
-volatile uint32_t PortNumOfSamples = 0u;    /* Number of samples for port streaming */
-volatile uint32_t PortSamples = 0u;         /* Current sample count for port (if needed separately) */
-uint8_t PortModule = 0u;           /* Module ID for port streaming */
-uint8_t PortNumber = 0u;           /* Port number for streaming */
-Sensor PortFunction;                    /* Function pointer or struct for port streaming */
+static bool stopStream = false;
+uint8_t PortModule = 0u;
+uint8_t PortNumber = 0u;
+uint8_t StreamMode = 0u;
+uint8_t TerminalPort = 0u;
+uint8_t cliStreamingFlag =0;
+uint32_t TerminalNumOfSamples = 0u;
+uint32_t PortNumOfSamples = 0u;
 
-/* Stream to terminal variables */
-volatile uint32_t TerminalNumOfSamples = 0u; /* Number of samples for terminal streaming */
-volatile uint8_t TerminalPort = 0u;          /* Port number for terminal streaming */
-uint32_t TerminalTimeout = 0u;               /* Timeout value for terminal streaming */
-MAX30100_MODE TerminalFunction;                   /* Function pointer or struct for terminal streaming */
-uint8_t StreamMode = 0u;                     /* Streaming mode selector (port or terminal) */
-uint8_t StopeCliStreamFlag = 0u;             /* Flag to stop CLI streaming */
-/* General streaming variable */
-uint32_t SampleCount = 0u;                   /* Total sample counter */
-
+/* Global variables for sensor data used in ModuleParam */
 uint8_t H2BR1_heartRate = 0;
 uint8_t H2BR1_SPO2 = 0;
 FINGER_STATE H2BR1_fingerState = 0;
@@ -76,79 +54,94 @@ ModuleParam_t ModuleParam[NUM_MODULE_PARAMS] ={
     {.ParamPtr = &H2BR1_fingerState, .ParamFormat = FMT_UINT8, .ParamName = "fingerstate"}
 };
 
+/* Local Typedef related to stream functions */
+typedef void (*SampleMemsToString)(char *, size_t);
 
-/* Private function prototypes -----------------------------------------------*/
-void StreamTimeCallback(TimerHandle_t xTimerStream);
-Module_Status SampleToTerminal(uint8_t dstPort, MAX30100_MODE mode);
-//Module_Status ExportStreanToTerminal (uint8_t port,Sensor Sensor,uint32_t Numofsamples,uint32_t timeout);
-Module_Status ExportStreanToPort (uint8_t module,uint8_t port,Sensor Sensor,uint32_t Numofsamples,uint32_t timeout);
+/* Private function prototypes *********************************************/
+uint8_t ClearROtopology(void);
+void Module_Peripheral_Init(void);
+void SetupPortForRemoteBootloaderUpdate(uint8_t port);
+void RemoteBootloaderUpdate(uint8_t src,uint8_t dst,uint8_t inport,uint8_t outport);
+Module_Status Module_MessagingTask(uint16_t code,uint8_t port,uint8_t src,uint8_t dst,uint8_t shift);
+
+/* Local function prototypes ***********************************************/
 Module_Status Init_MAX30100(void);
-//void EXGTask(void *argument);
-void MAX30100_Reset();
-void MAX30100_Enable_Interrupt(INTERRUPT_EN_A_FULL_BIT aFull, INTERRUPT_EN_TEMP_RDY_BIT tempRdy, INTERRUPT_EN_HR_RDY_BIT hrRdy, INTERRUPT_EN_SPO2_RDY_BIT Spo2Rdy);
-void MAX30100_Set_Mode(MAX30100_MODE mode);
-void MAX30100_Set_SpO2_SampleRate(MAX30100_SpO2_SR sampleRate);
-void MAX30100_Set_Led_PulseWidth(MAX30100_LED_PW pulseWidth );
-void MAX30100_Set_Led_Current(MAX30100_LED_Current redPa, MAX30100_LED_Current irPa );
+
+void MAX30100_Reset(void);
 void MAX30100_Read_FIFO();
 void MAX30100_Clear_FIFO(void);
+void MAX30100_Set_Mode(MAX30100_MODE mode);
+void MAX30100_Enable_Interrupt(INTERRUPT_EN_A_FULL_BIT aFull, INTERRUPT_EN_TEMP_RDY_BIT tempRdy,
+		INTERRUPT_EN_HR_RDY_BIT hrRdy, INTERRUPT_EN_SPO2_RDY_BIT Spo2Rdy);
 
-void Oxymeter_Modify_Led_Current_Bias();
-void Oxymeter_Add_Samples_To_Buffers();
+void MAX30100_Set_Led_PulseWidth(MAX30100_LED_PW pulseWidth );
+void MAX30100_Set_SpO2_SampleRate(MAX30100_SpO2_SR sampleRate);
+void MAX30100_Set_Led_Current(MAX30100_LED_Current redPa, MAX30100_LED_Current irPa );
+
 void Oxymeter_Detect_Finger();
 void Oxymeter_Signal_Processing();
+void Oxymeter_Add_Samples_To_Buffers();
+void Oxymeter_Modify_Led_Current_Bias();
+
+/* These two functions should be Used in external interrupt service routine */
+void Read_Data_When_Interrupt(void);
+void Oxymeter_Calculating_HR_SPO2(void);
+
+/* Stream Functions */
+void StreamTimeCallback(TimerHandle_t xTimerStream);
+
 void SampleHRToString(char *cstring, size_t maxLen);
 void SampleSPO2ToString(char *cstring, size_t maxLen);
-//These two functions should be put in external interrupt service routine
-void Read_Data_When_Interrupt();
-void Oxymeter_Calculating_HR_SPO2();
 
+Module_Status SampleToTerminal(uint8_t dstPort, MAX30100_MODE mode);
 Module_Status StreamToCLI(uint32_t Numofsamples, uint32_t timeout,Sensor Sensor);
+Module_Status ExportStreanToPort (uint8_t module,uint8_t port,Sensor Sensor,uint32_t Numofsamples,uint32_t timeout);
+
 static Module_Status PollingSleepCLISafe(uint32_t period, long Numofsamples);
 static Module_Status StreamMemsToCLI(uint32_t Numofsamples, uint32_t timeout, SampleMemsToString function);
-/* Create CLI commands --------------------------------------------------------*/
+static bool StreamCommandParser(const int8_t *pcCommandString, const char **ppSensName, portBASE_TYPE *pSensNameLen,
+		bool *pPortOrCLI, uint32_t *pPeriod, uint32_t *pTimeout, uint8_t *pPort, uint8_t *pModule);
+
+/* Create CLI commands *****************************************************/
 portBASE_TYPE CLI_HR_SampleCommand( int8_t *pcWriteBuffer, size_t xWriteBufferLen, const int8_t *pcCommandString );
 portBASE_TYPE CLI_SPO2_SampleCommand( int8_t *pcWriteBuffer, size_t xWriteBufferLen, const int8_t *pcCommandString );
 portBASE_TYPE CLI_FingerStateCommand( int8_t *pcWriteBuffer, size_t xWriteBufferLen, const int8_t *pcCommandString );
 portBASE_TYPE StreamSPO2Command( int8_t *pcWriteBuffer, size_t xWriteBufferLen, const int8_t *pcCommandString );
 
-/*-----------------------------------------------------------*/
+/* CLI command structure ***************************************************/
 /* CLI command structure : HR_Sample */
-const CLI_Command_Definition_t CLI_HR_SampleCommandDefinition =
-{
+const CLI_Command_Definition_t CLI_HR_SampleCommandDefinition = {
 	( const int8_t * ) "hrsample", /* The command string to type. */
 	( const int8_t * ) "hrsample:\r\nTake one sample measurement to measure heart rate after 6 seconds from placing the hand on the sensor.\r\n\r\n",
 	CLI_HR_SampleCommand, /* The function to run. */
 	0 /* zero parameters are expected. */
 };
-/*-----------------------------------------------------------*/
+
+/***************************************************************************/
 /* CLI command structure : SPO2_Sample */
-const CLI_Command_Definition_t CLI_SPO2_SampleCommandDefinition =
-{
+const CLI_Command_Definition_t CLI_SPO2_SampleCommandDefinition = {
 	( const int8_t * ) "spo2sample", /* The command string to type. */
 	( const int8_t * ) "spo2sample:\r\nTake one sample measurement to measure oxygenation rate after 6 seconds from placing the hand on the sensor.\r\n\r\n",
 	CLI_SPO2_SampleCommand, /* The function to run. */
 	0 /* zero parameters are expected. */
 };
-/*-----------------------------------------------------------*/
+
+/***************************************************************************/
 const CLI_Command_Definition_t StreamCommandDefinition = {
 	(const int8_t *) "stream",
 	(const int8_t *) "stream:\r\n Syntax: stream [EMG]/[EEG]/[EOG]/[ECG] (Numofsamples ) (time in ms) [port] [module].\r\n\r\n",
 	StreamSPO2Command,
 	-1
 };
-/*-----------------------------------------------------------*/
+
+/***************************************************************************/
 /* CLI command structure : FingerState */
-const CLI_Command_Definition_t CLI_FingerStateCommandDefinition =
-{
+const CLI_Command_Definition_t CLI_FingerStateCommandDefinition = {
 	( const int8_t * ) "fingerstate", /* The command string to type. */
 	( const int8_t * ) "fingerstate:\r\nFeel the presence of a finger on or near the sensor.\r\n\r\n",
 	CLI_FingerStateCommand, /* The function to run. */
 	0 /* zero parameters are expected. */
 };
-/*-----------------------------------------------------------*/
-
-
 
 /***************************************************************************/
 /************************ Private function Definitions *********************/
@@ -293,9 +286,9 @@ BOS_Status DisableStandbyModeWakeupPinx(WakeupPins_t wakeupPins){
 	/* The standby wake-up is same as a system RESET:
 	 * The entire code runs from the beginning just as if it was a RESET.
 	 * The only difference between a reset and a STANDBY wake-up is that, when the MCU wakes-up,
-	 * The SBF status flag in the PWR power control/status register (PWR_CSR) is set */
+	 * The SBF status cliStreamingFlag in the PWR power control/status register (PWR_CSR) is set */
 	if(__HAL_PWR_GET_FLAG(PWR_FLAG_SB) != RESET){
-		/* clear the flag */
+		/* clear the cliStreamingFlag */
 		__HAL_PWR_CLEAR_FLAG(PWR_FLAG_SB);
 
 		/* Disable  Wake-up Pinx */
@@ -706,6 +699,8 @@ Module_Status GetModuleParameter(uint8_t paramIndex, float *value) {
  */
 void StreamTimeCallback(TimerHandle_t xTimerStream) {
 
+	uint32_t SampleCount = 0u;                   /* Total sample counter */
+
 	/* Increment sample counter */
 	++SampleCount;
 
@@ -733,7 +728,7 @@ void StreamTimeCallback(TimerHandle_t xTimerStream) {
 }
 
 /***************************************************************************/
-void MAX30100_Reset() {
+void MAX30100_Reset(void) {
 	uint8_t modeConfReg = 0;
 
 	modeConfReg = modeConfReg & MAX30100_MODE_CONF_RESET_MASK;
@@ -1014,7 +1009,7 @@ void Oxymeter_Signal_Processing() {
 
 /***************************************************************************/
 /* This function should put within external interrupt function */
-void Read_Data_When_Interrupt() {
+void Read_Data_When_Interrupt(void) {
 	uint8_t interruptReg = 0;
 
 	MAX30100_Read(MAX30100_INTERRUPT_ADDR, &interruptReg, 1, 100);
@@ -1029,7 +1024,7 @@ void Read_Data_When_Interrupt() {
 }
 
 /***************************************************************************/
-void Oxymeter_Calculating_HR_SPO2() {
+void Oxymeter_Calculating_HR_SPO2(void) {
 	Oxymeter_Detect_Finger(MaxStruct);
 
 	if (MaxStruct.fingerState == FINGER_STATE_DETECTED) {
@@ -1157,7 +1152,7 @@ static Module_Status PollingSleepCLISafe(uint32_t period, long Numofsamples) {
 		for (uint8_t chr = 1; chr < MSG_RX_BUF_SIZE; chr++) {
 			if (UARTRxBuf[pcPort - 1][chr] == '\r') {
 				UARTRxBuf[pcPort - 1][chr] = 0;
-				flag = 1;
+				cliStreamingFlag = 1;
 				return H2BR1_ERR_TERMINATED;
 			}
 		}
@@ -1178,7 +1173,7 @@ static Module_Status StreamMemsToCLI(uint32_t Numofsamples, uint32_t timeout, Sa
 	long numTimes = timeout / period;
 
 	if (period < MIN_MEMS_PERIOD_MS)
-		return H2BR1_ERR_WrongParams;
+		return H2BR1_ERR_WRONGPARAMS;
 
 	for (uint8_t chr = 0; chr < MSG_RX_BUF_SIZE; chr++) {
 		if (UARTRxBuf[pcPort - 1][chr] == '\r') {
@@ -1186,8 +1181,8 @@ static Module_Status StreamMemsToCLI(uint32_t Numofsamples, uint32_t timeout, Sa
 		}
 	}
 
-	if (1 == flag) {
-		flag = 0;
+	if (1 == cliStreamingFlag) {
+		cliStreamingFlag = 0;
 		static char *pcOKMessage = (int8_t*) "Stop stream !\n\r";
 		writePxITMutex(pcPort, pcOKMessage, strlen(pcOKMessage), 10);
 		return status;
@@ -1417,6 +1412,7 @@ Module_Status StreamToPort(uint8_t dstModule, uint8_t dstPort, Sensor dataFuncti
 Module_Status StreamToTerminal(uint8_t dstPort, MAX30100_MODE dataFunction, uint32_t numOfSamples, uint32_t streamTimeout) {
 	Module_Status Status = H2BR1_OK;
 	uint32_t SamplePeriod = 0u;
+	uint32_t TerminalTimeout = 0u;               /* Timeout value for terminal streaming */
 
 	/* Check timer handle and timeout validity */
 	if ((NULL == xTimerStream) || (0 == streamTimeout) || (0 == numOfSamples))

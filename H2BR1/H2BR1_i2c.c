@@ -61,12 +61,12 @@ void HAL_I2C_MspInit(I2C_HandleTypeDef *i2cHandle) {
 		 PB3     ------> I2C2_SCL
 		 PB4     ------> I2C2_SDA
 		 */
-		GPIO_InitStruct.Pin = GPIO_PIN_3 | GPIO_PIN_4;
+		GPIO_InitStruct.Pin = SENSOR_I2C_SCL_PIN | SENSOR_I2C_SDA_PIN;
 		GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;
 		GPIO_InitStruct.Pull = GPIO_PULLUP;
 		GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
 		GPIO_InitStruct.Alternate = GPIO_AF8_I2C2;
-		HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+		HAL_GPIO_Init(SENSOR_I2C_PORT, &GPIO_InitStruct);
 
 		/* I2C2 clock enable */
 		__HAL_RCC_I2C2_CLK_ENABLE();
@@ -83,9 +83,9 @@ void HAL_I2C_MspDeInit(I2C_HandleTypeDef *i2cHandle) {
 		 PB3     ------> I2C2_SCL
 		 PB4     ------> I2C2_SDA
 		 */
-		HAL_GPIO_DeInit(GPIOB, GPIO_PIN_3);
+		HAL_GPIO_DeInit(SENSOR_I2C_PORT, SENSOR_I2C_SCL_PIN);
 
-		HAL_GPIO_DeInit(GPIOB, GPIO_PIN_4);
+		HAL_GPIO_DeInit(SENSOR_I2C_PORT, SENSOR_I2C_SDA_PIN);
 	}
 }
 
@@ -98,7 +98,7 @@ Module_Status MAX30100_Write(uint8_t regAddr, uint8_t txData, uint32_t timeout) 
 	data[1] = txData;
 	uint8_t size = 2;
 	taskENTER_CRITICAL();
-	HAL_I2C_Master_Transmit(&HANDLER_I2C_MAX30100, MAX30100_I2C_ADDRESS, data, size, timeout);
+	HAL_I2C_Master_Transmit(I2C_HANDLER, MAX30100_I2C_ADDRESS, data, size, timeout);
 	taskEXIT_CRITICAL();
 
 	return Status;
@@ -109,11 +109,11 @@ Module_Status MAX30100_Read(uint8_t regAddr, uint8_t *pRxData, uint8_t size, uin
 	Module_Status Status = HAL_OK;
 
 	taskENTER_CRITICAL();
-	HAL_I2C_Master_Transmit(&HANDLER_I2C_MAX30100, MAX30100_I2C_ADDRESS, &regAddr, 1, timeout);
+	HAL_I2C_Master_Transmit(I2C_HANDLER, MAX30100_I2C_ADDRESS, &regAddr, 1, timeout);
 	taskEXIT_CRITICAL();
 
 	taskENTER_CRITICAL();
-	HAL_I2C_Master_Receive(&HANDLER_I2C_MAX30100, MAX30100_I2C_ADDRESS, pRxData, size, timeout);
+	HAL_I2C_Master_Receive(I2C_HANDLER, MAX30100_I2C_ADDRESS, pRxData, size, timeout);
 	taskEXIT_CRITICAL();
 
 	return Status;

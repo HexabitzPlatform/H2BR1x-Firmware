@@ -44,10 +44,10 @@ void SPO2GPIOInit(void) {
 
 	/*Configure GPIO pin Output Level */
 	/*Configure GPIO pin : PD1 */
-	GPIO_InitStruct.Pin = GPIO_PIN_1;
+	GPIO_InitStruct.Pin = SPO2_EXT_INT_PIN;
 	GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
 	GPIO_InitStruct.Pull = GPIO_NOPULL;
-	HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+	HAL_GPIO_Init(SPO2_EXT_INT_PORT, &GPIO_InitStruct);
 
 	/* EXTI interrupt init*/
 	HAL_NVIC_SetPriority(EXTI0_1_IRQn, 1, 0);

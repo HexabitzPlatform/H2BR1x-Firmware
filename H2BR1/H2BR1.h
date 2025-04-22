@@ -54,6 +54,7 @@
 #define UART_P4 &huart1
 #define UART_P5 &huart5
 
+/* Module-specific Hardware Definitions ************************************/
 /* Port Definitions */
 #define	USART1_TX_PIN		GPIO_PIN_9
 #define	USART1_RX_PIN		GPIO_PIN_10
@@ -85,43 +86,44 @@
 #define	USART6_RX_PORT		GPIOB
 #define	USART6_AF			GPIO_AF8_USART6
 
+/* SPO2 External Interrupt Pin */
+#define SPO2_EXT_INT_PIN    GPIO_PIN_1
+#define SPO2_EXT_INT_PORT   GPIOD
 
-/* Module-specific Definitions */
+/* I2C Pin Definition */
+#define SENSOR_I2C_SCL_PIN  GPIO_PIN_3
+#define SENSOR_I2C_SDA_PIN  GPIO_PIN_4
+#define SENSOR_I2C_PORT     GPIOB
+
+#define I2C_HANDLER         &hi2c2
 
 /* Indicator LED */
-#define _IND_LED_PORT			GPIOA
-#define _IND_LED_PIN			GPIO_PIN_5
+#define _IND_LED_PORT		GPIOA
+#define _IND_LED_PIN		GPIO_PIN_5
 
-#define NUM_MODULE_PARAMS		3
+/* Module-specific Macro Definitions ***************************************/
+#define NUM_MODULE_PARAMS		 3
 
-
-#define MIN_MEMS_PERIOD_MS				100
-#define MAX_MEMS_TIMEOUT_MS				0xFFFFFFFF
-
-
-/* Macros definitions */
+/* Streaming Parameters */
+#define MIN_MEMS_PERIOD_MS		 100
+#define MAX_MEMS_TIMEOUT_MS		 0xFFFFFFFF
 #define STREAM_MODE_TO_PORT      1
 #define STREAM_MODE_TO_TERMINAL  2
 
-/* EXG Module_Status Type Definition */
+/* Module-specific Type Definition *****************************************/
+/* Module-status Type Definition */
 typedef enum {
 	H2BR1_OK =0,
 	H2BR1_ERR_UNKNOWNMESSAGE,
 	H2BR1_ERR_WRONGPARAMS,
 	H2BR1_ERR_TERMINATED,
-	H2BR1_ERR_WrongParams,
 	H2BR1_ERROR =255
 } Module_Status;
 
-extern I2C_HandleTypeDef hi2c2;
-
-typedef enum
-{
-	HR = 0,
-	SPO2 ,
+/* SPO2 Signal type */
+typedef enum {
+	HR = 0, SPO2,
 } Sensor;
-
-extern  MAX30100_s MaxStruct;
 
 /* Export UART variables */
 extern UART_HandleTypeDef huart1;

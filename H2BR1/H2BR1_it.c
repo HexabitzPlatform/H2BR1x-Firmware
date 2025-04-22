@@ -22,6 +22,10 @@ extern TaskHandle_t xCommandConsoleTaskHandle; /* CLI Task handler */
 uint16_t PacketLength =0;
 uint8_t Count =0;
 
+/* Exported Functions ******************************************************/
+extern void Read_Data_When_Interrupt(void);
+extern void Oxymeter_Calculating_HR_SPO2(void);
+
 /***************************************************************************/
 /******** Cortex-M0+ Processor Interruption and Exception Handlers *********/
 /***************************************************************************/
@@ -73,7 +77,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart,uint16_t Size){
 /***************************************************************************/
 void EXTI0_1_IRQHandler(void) {
 
-	HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_1);
+	HAL_GPIO_EXTI_IRQHandler(SPO2_EXT_INT_PIN);
 
 	Read_Data_When_Interrupt();
 	Oxymeter_Calculating_HR_SPO2();
