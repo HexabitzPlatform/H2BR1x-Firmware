@@ -25,22 +25,24 @@ UART_HandleTypeDef huart3;
 UART_HandleTypeDef huart5;
 UART_HandleTypeDef huart6;
 
-Sensor PortFunction;
+All_Data PortFunction;
 MAX30100_s MaxStruct;
-MAX30100_MODE TerminalFunction;
+
 
 TimerHandle_t xTimerStream = NULL;
 
 /* Private Variables *******************************************************/
-/* Stream to port variables */
-static bool stopStream = false;
-uint8_t PortModule = 0u;
-uint8_t PortNumber = 0u;
-uint8_t StreamMode = 0u;
-uint8_t TerminalPort = 0u;
-uint8_t cliStreamingFlag =0;
-uint32_t TerminalNumOfSamples = 0u;
-uint32_t PortNumOfSamples = 0u;
+/* Streaming variables */
+static bool stopStream = false;         /* Flag to indicate whether to stop streaming process */
+uint8_t PortModule = 0u;                /* Module ID for the destination port */
+uint8_t PortNumber = 0u;                /* Physical port number used for streaming */
+uint8_t StreamMode = 0u;                /* Current active streaming mode (to port, terminal, etc.) */
+uint8_t TerminalPort = 0u;              /* Port number used to output data to a terminal */
+uint8_t StopeCliStreamFlag = 0u;        /* Flag to request stopping a CLI stream operation */
+uint32_t SampleCount = 0u;              /* Counter to track the number of samples streamed */
+uint32_t PortNumOfSamples = 0u;         /* Total number of samples to be sent through the port */
+uint32_t TerminalNumOfSamples = 0u;     /* Total number of samples to be streamed to the terminal */
+
 
 /* Global variables for sensor data used in ModuleParam */
 uint8_t H2BR1_heartRate = 0;
@@ -55,7 +57,9 @@ ModuleParam_t ModuleParam[NUM_MODULE_PARAMS] ={
 };
 
 /* Local Typedef related to stream functions */
-typedef void (*SampleMemsToString)(char *, size_t);
+typedef void (*SampleToString)(char*,size_t);
+typedef void (*SampleToBuffer)(float *buffer);
+
 
 /* Private function prototypes *********************************************/
 uint8_t ClearROtopology(void);
@@ -93,12 +97,11 @@ void StreamTimeCallback(TimerHandle_t xTimerStream);
 void SampleHRToString(char *cstring, size_t maxLen);
 void SampleSPO2ToString(char *cstring, size_t maxLen);
 
-Module_Status SampleToTerminal(uint8_t dstPort, MAX30100_MODE mode);
-Module_Status StreamToCLI(uint32_t Numofsamples, uint32_t timeout,Sensor Sensor);
-Module_Status ExportStreanToPort (uint8_t module,uint8_t port,Sensor Sensor,uint32_t Numofsamples,uint32_t timeout);
+Module_Status SampleToTerminal(uint8_t dstPort, All_Data mode);
+Module_Status ExportStreanToPort (uint8_t module,uint8_t port,All_Data Sensor,uint32_t Numofsamples,uint32_t timeout);
 
 static Module_Status PollingSleepCLISafe(uint32_t period, long Numofsamples);
-static Module_Status StreamMemsToCLI(uint32_t Numofsamples, uint32_t timeout, SampleMemsToString function);
+static Module_Status StreamToCLI(uint32_t Numofsamples, uint32_t timeout, SampleToString function);
 static bool StreamCommandParser(const int8_t *pcCommandString, const char **ppSensName, portBASE_TYPE *pSensNameLen,
 		bool *pPortOrCLI, uint32_t *pPeriod, uint32_t *pTimeout, uint8_t *pPort, uint8_t *pModule);
 
@@ -286,9 +289,9 @@ BOS_Status DisableStandbyModeWakeupPinx(WakeupPins_t wakeupPins){
 	/* The standby wake-up is same as a system RESET:
 	 * The entire code runs from the beginning just as if it was a RESET.
 	 * The only difference between a reset and a STANDBY wake-up is that, when the MCU wakes-up,
-	 * The SBF status cliStreamingFlag in the PWR power control/status register (PWR_CSR) is set */
+	 * The SBF status StopeCliStreamFlag in the PWR power control/status register (PWR_CSR) is set */
 	if(__HAL_PWR_GET_FLAG(PWR_FLAG_SB) != RESET){
-		/* clear the cliStreamingFlag */
+		/* clear the StopeCliStreamFlag */
 		__HAL_PWR_CLEAR_FLAG(PWR_FLAG_SB);
 
 		/* Disable  Wake-up Pinx */
@@ -719,14 +722,69 @@ void StreamTimeCallback(TimerHandle_t xTimerStream) {
 	else if (STREAM_MODE_TO_TERMINAL == StreamMode) {
 		if ((SampleCount <= TerminalNumOfSamples)
 				|| (0 == TerminalNumOfSamples)) {
-			SampleToTerminal(TerminalPort, TerminalFunction);
+			SampleToTerminal(TerminalPort, PortFunction);
 		} else {
 			SampleCount = 0;
 			xTimerStop(xTimerStream, 0);
 		}
 	}
 }
+/***************************************************************************/
+/* Samples heart rate data into a buffer.
+ * buffer: Pointer to the buffer where heart rate data will be stored.
+ */
+void SampleHRBuf(float *buffer) {
+    uint8_t heartRate;
+    HR_Sample(&heartRate);
+    *buffer = (float)heartRate;
+}
 
+/***************************************************************************/
+/* Samples SpO2 data into a buffer.
+ * buffer: Pointer to the buffer where SpO2 data will be stored.
+ */
+void SampleSPO2Buf(float *buffer) {
+    uint8_t spo2;
+    SPO2_Sample(&spo2);
+    *buffer = (float)spo2;
+}
+/***************************************************************************/
+/* Streams sensor data to a buffer.
+ * buffer: Pointer to the buffer where data will be stored.
+ * Numofsamples: Number of samples to take.
+ * timeout: Timeout period for the operation.
+ * function: Function pointer to the sampling function (e.g., SampleHRBuf, SampleSPO2Buf).
+ */
+static Module_Status StreamToBuf(float *buffer, uint32_t Numofsamples, uint32_t timeout, SampleToBuffer function) {
+    Module_Status status = H2BR1_OK;
+    uint16_t StreamIndex = 0;
+    uint32_t period = timeout / Numofsamples;
+
+    /* Check if the calculated period is valid */
+    if (period < MIN_PERIOD_MS)
+        return H2BR1_ERR_WRONGPARAMS;
+
+    stopStream = false;
+
+    /* Stream data to buffer */
+    while ((Numofsamples-- > 0) || (timeout >= MAX_TIMEOUT_MS)) {
+        float sample;
+        function(&sample);
+        buffer[StreamIndex] = sample;
+        StreamIndex++;
+
+        /* Delay for the specified period */
+        vTaskDelay(pdMS_TO_TICKS(period));
+
+        /* Check if streaming should be stopped */
+        if (stopStream) {
+            status = H2BR1_ERR_TERMINATED;
+            break;
+        }
+    }
+
+    return status;
+}
 /***************************************************************************/
 void MAX30100_Reset(void) {
 	uint8_t modeConfReg = 0;
@@ -1065,7 +1123,7 @@ Module_Status Init_MAX30100(void) {
  * dstPort: The port number used for data transmission.
  * mode: The mode of operation (HR_MODE for heart rate, SPO2_MODE for oxygenation).
  */
-Module_Status SampleToTerminal(uint8_t dstPort, MAX30100_MODE mode) {
+Module_Status SampleToTerminal(uint8_t dstPort, All_Data mode) {
 	Module_Status status = H2BR1_OK; /* Initialize operation status as success */
 	char formattedString[20]; /* Buffer for formatted output string */
 
@@ -1075,7 +1133,7 @@ Module_Status SampleToTerminal(uint8_t dstPort, MAX30100_MODE mode) {
 
 	/* Process data based on the selected mode */
 	switch (mode) {
-	case HR_MODE:
+	case HR:
 		/* Check if new IR data is available */
 		if (MaxStruct.dataReadingFlag1 == 1) {
 			MaxStruct.dataReadingFlag1 = 0;
@@ -1087,7 +1145,7 @@ Module_Status SampleToTerminal(uint8_t dstPort, MAX30100_MODE mode) {
 		}
 		break;
 
-	case SPO2_MODE:
+	case SPO2:
 		/* Check if new IR and RED data is available */
 		if (MaxStruct.dataReadingFlag1 == 1) {
 			MaxStruct.dataReadingFlag1 = 0;
@@ -1122,24 +1180,6 @@ void SampleSPO2ToString(char *cstring, size_t maxLen) {
 }
 
 /***************************************************************************/
-Module_Status StreamToCLI(uint32_t Numofsamples, uint32_t timeout,Sensor Sensor) {
-
-	switch (Sensor) {
-	case HR:
-		StreamMemsToCLI(Numofsamples, timeout, SampleHRToString);
-		break;
-
-	case SPO2:
-		StreamMemsToCLI(Numofsamples, timeout, SampleSPO2ToString);
-		break;
-
-	default:
-		break;
-	}
-
-}
-
-/***************************************************************************/
 static Module_Status PollingSleepCLISafe(uint32_t period, long Numofsamples) {
 	const unsigned DELTA_SLEEP_MS = 100;
 	long numDeltaDelay = period / DELTA_SLEEP_MS;
@@ -1152,7 +1192,7 @@ static Module_Status PollingSleepCLISafe(uint32_t period, long Numofsamples) {
 		for (uint8_t chr = 1; chr < MSG_RX_BUF_SIZE; chr++) {
 			if (UARTRxBuf[pcPort - 1][chr] == '\r') {
 				UARTRxBuf[pcPort - 1][chr] = 0;
-				cliStreamingFlag = 1;
+				StopeCliStreamFlag = 1;
 				return H2BR1_ERR_TERMINATED;
 			}
 		}
@@ -1166,13 +1206,13 @@ static Module_Status PollingSleepCLISafe(uint32_t period, long Numofsamples) {
 }
 
 /***************************************************************************/
-static Module_Status StreamMemsToCLI(uint32_t Numofsamples, uint32_t timeout, SampleMemsToString function) {
+static Module_Status StreamToCLI(uint32_t Numofsamples, uint32_t timeout, SampleToString function) {
 	Module_Status status = H2BR1_OK;
 	int8_t *pcOutputString = NULL;
 	uint32_t period = timeout / Numofsamples;
 	long numTimes = timeout / period;
 
-	if (period < MIN_MEMS_PERIOD_MS)
+	if (period < MIN_PERIOD_MS)
 		return H2BR1_ERR_WRONGPARAMS;
 
 	for (uint8_t chr = 0; chr < MSG_RX_BUF_SIZE; chr++) {
@@ -1181,8 +1221,8 @@ static Module_Status StreamMemsToCLI(uint32_t Numofsamples, uint32_t timeout, Sa
 		}
 	}
 
-	if (1 == cliStreamingFlag) {
-		cliStreamingFlag = 0;
+	if (1 == StopeCliStreamFlag) {
+		StopeCliStreamFlag = 0;
 		static char *pcOKMessage = (int8_t*) "Stop stream !\n\r";
 		writePxITMutex(pcPort, pcOKMessage, strlen(pcOKMessage), 10);
 		return status;
@@ -1193,7 +1233,7 @@ static Module_Status StreamMemsToCLI(uint32_t Numofsamples, uint32_t timeout, Sa
 
 	stopStream = false;
 
-	while ((numTimes-- > 0) || (timeout >= MAX_MEMS_TIMEOUT_MS)) {
+	while ((numTimes-- > 0) || (timeout >= MAX_TIMEOUT_MS)) {
 		pcOutputString = FreeRTOS_CLIGetOutputBuffer();
 		function((char*) pcOutputString, 100);
 
@@ -1211,36 +1251,6 @@ static Module_Status StreamMemsToCLI(uint32_t Numofsamples, uint32_t timeout, Sa
 /***************************************************************************/
 /***************************** General Functions ***************************/
 /***************************************************************************/
-/* reads infrared samples from MaxStruct and stores them in the provided buffer.
- * (Note: You can use them specifically to draw the signal).
- * irSampleBuffer: pointer to an array to store the infrared samples (16 samples).
- */
-Module_Status HR_ReadBuffer(uint16_t *irSampleBuffer) {
-	uint8_t status = H2BR1_OK;
-
-	for (uint8_t i = 0; i < MAX30100_FIFO_SAMPLES_SIZE; i++)
-		irSampleBuffer[i] = MaxStruct.irSamples[i];
-
-	return status;
-}
-
-/***************************************************************************/
-/* reads red and infrared samples from MaxStruct and stores them in the provided buffers.
- * (Note: You can use them specifically to draw the signal).
- * redSampleBuffer: pointer to an array to store red samples (16 samples).
- * irSampleBuffer: pointer to an array to store infrared samples (16 samples).
- */
-Module_Status SPO2_ReadBuffer(uint16_t *redSampleBuffer, uint16_t *irSampleBuffer) {
-	uint8_t status = H2BR1_OK;
-
-	for (uint8_t i = 0; i < MAX30100_FIFO_SAMPLES_SIZE; i++) {
-		redSampleBuffer[i] = MaxStruct.redSamples[i];
-		irSampleBuffer[i] = MaxStruct.irSamples[i];
-	}
-
-	return status;
-}
-
 /***************************************************************************/
 /* Sample Read Flag for IC MAX30100
  * sampleReadFlag: pointer to a buffer to store value it always gives 1
@@ -1306,7 +1316,7 @@ Module_Status SPO2_Sample(uint8_t *SPO2) {
  * dstPort: dstPort: The port number to export data to.
  * dataFunction: sensorType: The type of sensor (HR for heart rate, SPO2 for oxygen saturation).
  */
-Module_Status SampleToPort(uint8_t dstModule, uint8_t dstPort, Sensor dataFunction) {
+Module_Status SampleToPort(uint8_t dstModule, uint8_t dstPort, All_Data dataFunction) {
 	uint8_t hrValue = 0; /* Variable to store heart rate sample */
 	uint8_t spo2Value = 0; /* Variable to store oxygen saturation sample */
 	Module_Status status = H2BR1_OK; /* Initialize operation status as success */
@@ -1368,7 +1378,7 @@ Module_Status SampleToPort(uint8_t dstModule, uint8_t dstPort, Sensor dataFuncti
  * numOfSamples: The number of samples to stream.
  * streamTimeout: The interval (in milliseconds) between successive data transmissions.
  */
-Module_Status StreamToPort(uint8_t dstModule, uint8_t dstPort, Sensor dataFunction, uint32_t numOfSamples, uint32_t streamTimeout) {
+Module_Status StreamToPort(uint8_t dstModule, uint8_t dstPort, All_Data dataFunction, uint32_t numOfSamples, uint32_t streamTimeout) {
 	Module_Status Status = H2BR1_OK;
 	uint32_t SamplePeriod = 0u;
 
@@ -1409,7 +1419,7 @@ Module_Status StreamToPort(uint8_t dstModule, uint8_t dstPort, Sensor dataFuncti
  * numOfSamples: The number of samples to stream.
  * streamTimeout: The interval (in milliseconds) between successive data transmissions.
  */
-Module_Status StreamToTerminal(uint8_t dstPort, MAX30100_MODE dataFunction, uint32_t numOfSamples, uint32_t streamTimeout) {
+Module_Status StreamToTerminal(uint8_t dstPort, All_Data dataFunction, uint32_t numOfSamples, uint32_t streamTimeout) {
 	Module_Status Status = H2BR1_OK;
 	uint32_t SamplePeriod = 0u;
 	uint32_t TerminalTimeout = 0u;               /* Timeout value for terminal streaming */
@@ -1421,8 +1431,7 @@ Module_Status StreamToTerminal(uint8_t dstPort, MAX30100_MODE dataFunction, uint
 	/* Set streaming parameters */
 	StreamMode = STREAM_MODE_TO_TERMINAL;
 	TerminalPort = dstPort;
-	TerminalFunction = dataFunction;
-	TerminalTimeout = streamTimeout;
+	PortFunction = dataFunction;
 	TerminalNumOfSamples = numOfSamples;
 
 	/* Calculate the period from timeout and number of samples */
@@ -1445,6 +1454,27 @@ Module_Status StreamToTerminal(uint8_t dstPort, MAX30100_MODE dataFunction, uint
 	return Status;
 }
 
+/***************************************************************************/
+/*
+ * @brief: Streams data to a buffer.
+ * @param buffer: Pointer to the buffer where data will be stored.
+ * @param function: Function to sample data (e.g., HR, SPO2, FINGER_STATE).
+ * @param Numofsamples: Number of samples to take.
+ * @param timeout: Timeout period for the operation.
+ * @retval: Module status indicating success or error.
+ */
+Module_Status StreamToBuffer(float *buffer, All_Data function, uint32_t Numofsamples, uint32_t timeout) {
+    switch (function) {
+        case HR:
+            return StreamToBuf(buffer, Numofsamples, timeout, SampleHRBuf);
+            break;
+        case SPO2:
+            return StreamToBuf(buffer, Numofsamples, timeout, SampleSPO2Buf);
+            break;
+        default:
+            return H2BR1_ERR_WRONGPARAMS;
+    }
+}
 /***************************************************************************/
 /********************************* Commands ********************************/
 /***************************************************************************/
@@ -1473,13 +1503,13 @@ portBASE_TYPE StreamSPO2Command(int8_t *pcWriteBuffer, size_t xWriteBufferLen, c
 	do {
 		if (!strncmp(pSensName, HRCmdName, strlen(HRCmdName))) {
 			if (portOrCLI)
-				StreamToCLI(Numofsamples, timeout, HR);
+				StreamToCLI(Numofsamples, timeout, SampleHRToString);
 			else
 				StreamToPort(module, port, HR, Numofsamples, timeout);
 
 		} else if (!strncmp(pSensName, SPO2CmdName, strlen(SPO2CmdName))) {
 			if (portOrCLI)
-				StreamToCLI(Numofsamples, timeout, SPO2);
+				StreamToCLI(Numofsamples, timeout, SampleSPO2ToString);
 			else
 				StreamToPort(module, port, SPO2, Numofsamples, timeout);
 		} else {

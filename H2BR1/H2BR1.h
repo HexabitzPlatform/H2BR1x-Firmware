@@ -105,8 +105,8 @@
 #define NUM_MODULE_PARAMS		 3
 
 /* Streaming Parameters */
-#define MIN_MEMS_PERIOD_MS		 100
-#define MAX_MEMS_TIMEOUT_MS		 0xFFFFFFFF
+#define MIN_PERIOD_MS		     100
+#define MAX_TIMEOUT_MS		     0xFFFFFFFF
 #define STREAM_MODE_TO_PORT      1
 #define STREAM_MODE_TO_TERMINAL  2
 
@@ -123,7 +123,7 @@ typedef enum {
 /* SPO2 Signal type */
 typedef enum {
 	HR = 0, SPO2,
-} Sensor;
+} All_Data;
 
 /* Export UART variables */
 extern UART_HandleTypeDef huart1;
@@ -146,15 +146,13 @@ extern void SystemClock_Config(void);
 Module_Status HR_Sample(uint8_t *heartRate);
 Module_Status SPO2_Sample(uint8_t *SPO2);
 Module_Status FingerState(FINGER_STATE *fingerState);
-Module_Status PlotToTerminal(uint8_t port, MAX30100_MODE mode);
-Module_Status HR_ReadBuffer(uint16_t *irSampleBuffer);
-Module_Status SPO2_ReadBuffer(uint16_t *redSampleBuffer, uint16_t *irSampleBuffer);
 Module_Status SampleReadFlag(uint8_t *sampleReadFlag);
 Module_Status ResetSampleReadFlag(void);
 
-Module_Status SampleToPort(uint8_t dstModule, uint8_t dstPort, Sensor dataFunction);
-Module_Status StreamToPort(uint8_t dstModule,uint8_t dstPort,Sensor dataFunction,uint32_t numOfSamples,uint32_t streamTimeout);
-Module_Status StreamToTerminal(uint8_t dstPort,MAX30100_MODE dataFunction,uint32_t numOfSamples,uint32_t streamTimeout);
+Module_Status SampleToPort(uint8_t dstModule, uint8_t dstPort, All_Data dataFunction);
+Module_Status StreamToPort(uint8_t dstModule,uint8_t dstPort,All_Data dataFunction,uint32_t numOfSamples,uint32_t streamTimeout);
+Module_Status StreamToTerminal(uint8_t dstPort,All_Data dataFunction,uint32_t numOfSamples,uint32_t streamTimeout);
+Module_Status StreamToBuffer(float *buffer, All_Data function, uint32_t Numofsamples, uint32_t timeout) ;
 
 #endif /* H2BR1_H */
 
