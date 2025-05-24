@@ -75,7 +75,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart,uint16_t Size){
 }
 
 /***************************************************************************/
-void EXTI0_1_IRQHandler(void) {
+void EXTI4_15_IRQHandler(void) {
 
 	HAL_GPIO_EXTI_IRQHandler(SPO2_EXT_INT_PIN);
 
@@ -175,14 +175,14 @@ void USART3_4_5_6_LPUART1_IRQHandler(void){
 #endif
 
 #if defined (_USART6)
-	HAL_UART_IRQHandler(&huart6);
+	HAL_UART_IRQHandler(&huart4);
 
-	if((READ_BIT(huart6.Instance->CR1, USART_CR1_TXEIE_TXFNFIE) == USART_CR1_TXEIE_TXFNFIE_Msk) && (huart6.gState == HAL_UART_STATE_READY)){
+	if((READ_BIT(huart4.Instance->CR1, USART_CR1_TXEIE_TXFNFIE) == USART_CR1_TXEIE_TXFNFIE_Msk) && (huart4.gState == HAL_UART_STATE_READY)){
 		/* Disable the UART Transmit Data Register Empty Interrupt */
-		ATOMIC_CLEAR_BIT(huart6.Instance->CR1,USART_CR1_TXEIE_TXFNFIE);
+		ATOMIC_CLEAR_BIT(huart4.Instance->CR1,USART_CR1_TXEIE_TXFNFIE);
 
 		/* Enable the UART Transmit Complete Interrupt */
-		ATOMIC_SET_BIT(huart6.Instance->CR1,USART_CR1_TCIE);
+		ATOMIC_SET_BIT(huart4.Instance->CR1,USART_CR1_TCIE);
 	}
 #endif
 
@@ -229,7 +229,7 @@ void DMA1_Ch4_7_DMA2_Ch1_5_DMAMUX1_OVR_IRQHandler(void) {
 
 #if defined (_USART6)
 	if (HAL_DMA_GET_IT_SOURCE(DMA1,DMA_ISR_GIF6) == SET)
-		DMA_IRQHandler(GetPort(&huart6));
+		DMA_IRQHandler(GetPort(&huart4));
 #endif
 
 }

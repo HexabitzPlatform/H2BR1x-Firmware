@@ -50,8 +50,8 @@ void SPO2GPIOInit(void) {
 	HAL_GPIO_Init(SPO2_EXT_INT_PORT, &GPIO_InitStruct);
 
 	/* EXTI interrupt init*/
-	HAL_NVIC_SetPriority(EXTI0_1_IRQn, 1, 0);
-	HAL_NVIC_EnableIRQ(EXTI0_1_IRQn);
+	HAL_NVIC_SetPriority(EXTI4_15_IRQn, 1, 0);
+	HAL_NVIC_EnableIRQ(EXTI4_15_IRQn);
 }
 
 /***************************************************************************/

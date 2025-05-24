@@ -22,8 +22,8 @@
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 UART_HandleTypeDef huart3;
+UART_HandleTypeDef huart4;
 UART_HandleTypeDef huart5;
-UART_HandleTypeDef huart6;
 
 All_Data PortFunction;
 MAX30100_s MaxStruct;
@@ -544,7 +544,7 @@ void SetupPortForRemoteBootloaderUpdate(uint8_t port){
 	__HAL_UART_ENABLE_IT(huart,UART_IT_RXNE);
 
 }
-
+Module_Status Y ;
 /***************************************************************************/
 /* H2BR1 module initialization */
 void Module_Peripheral_Init(void) {
@@ -556,12 +556,12 @@ void Module_Peripheral_Init(void) {
 	MX_USART1_UART_Init();
 	MX_USART2_UART_Init();
 	MX_USART3_UART_Init();
+	MX_USART4_UART_Init();
 	MX_USART5_UART_Init();
-	MX_USART6_UART_Init();
 
 	SPO2GPIOInit();
 	MX_I2C_Init();
-	Init_MAX30100();
+	Y=Init_MAX30100();
 
 	/* Circulating DMA Channels ON All Module */
 	for (int i = 1; i <= NUM_OF_PORTS; i++) {
@@ -573,8 +573,8 @@ void Module_Peripheral_Init(void) {
 			dmaIndex[i - 1] = &(DMA1_Channel3->CNDTR);
 		} else if (GetUart(i) == &huart5) {
 			dmaIndex[i - 1] = &(DMA1_Channel5->CNDTR);
-		} else if (GetUart(i) == &huart6) {
-			dmaIndex[i - 1] = &(DMA1_Channel6->CNDTR);
+		} else if (GetUart(i) == &huart4) {
+			dmaIndex[i - 1] = &(DMA1_Channel4->CNDTR);
 		}
 	}
 
@@ -628,7 +628,7 @@ Module_Status Module_MessagingTask(uint16_t code, uint8_t port, uint8_t src, uin
 /* Get the port for a given UART */
 uint8_t GetPort(UART_HandleTypeDef *huart){
 
-	if(huart->Instance == USART6)
+	if(huart->Instance == USART4)
 		return P1;
 	else if(huart->Instance == USART2)
 		return P2;
