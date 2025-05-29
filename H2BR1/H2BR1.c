@@ -600,22 +600,6 @@ Module_Status Module_MessagingTask(uint16_t code, uint8_t port, uint8_t src, uin
 		SampleToPort(cMessage[port - 1][shift], cMessage[port - 1][1 + shift], SPO2);
 		break;
 
-	case CODE_H2BR1_FingerState:
-		Module_Status status;
-		module = cMessage[port - 1][shift];
-		port = cMessage[port - 1][1 + shift];
-		status = FingerState(&fingerState);
-		if (H2BR1_OK == status)
-			MessageParams[1] = BOS_OK;
-		else
-			MessageParams[1] = BOS_ERROR;
-
-		MessageParams[0] = FMT_UINT8;
-		MessageParams[2] = 1;
-		MessageParams[3] = (uint8_t) fingerState;
-		SendMessageToModule(module, CODE_READ_RESPONSE, sizeof(uint8_t) + 3);
-		break;
-
 	default:
 		result = H2BR1_ERR_UNKNOWNMESSAGE;
 		break;
@@ -1310,64 +1294,70 @@ Module_Status SPO2_Sample(uint8_t *SPO2) {
 }
 
 /***************************************************************************/
-/* Samples data from a heart rate (HR) or oxygen saturation (SPO2) sensor
- * and exports it to a specified port or module.
- * dstModule: dstModule: The module number to export data to.
- * dstPort: dstPort: The port number to export data to.
- * dataFunction: sensorType: The type of sensor (HR for heart rate, SPO2 for oxygen saturation).
+/*
+ * @brief: Samples data from a heart rate (HR) or oxygen saturation (SPO2) sensor
+ *         and exports it to a specified port or module.
+ * @param dstModule: The module number to export data to.
+ * @param dstPort: The port number to export data to.
+ * @param dataFunction: The type of sensor (HR for heart rate, SPO2 for oxygen saturation).
+ * @retval: Module status indicating success or failure of the operation.
  */
 Module_Status SampleToPort(uint8_t dstModule, uint8_t dstPort, All_Data dataFunction) {
-	uint8_t hrValue = 0; /* Variable to store heart rate sample */
-	uint8_t spo2Value = 0; /* Variable to store oxygen saturation sample */
-	Module_Status status = H2BR1_OK; /* Initialize operation status as success */
+    uint8_t hrValue = 0; /* Variable to store heart rate sample */
+    uint8_t spo2Value = 0; /* Variable to store oxygen saturation sample */
+    Module_Status status = H2BR1_OK; /* Initialize operation status as success */
 
-	/* Validate the port and module ID */
-	if (dstPort == 0 && dstModule == myID)
-		return H2BR1_ERR_WRONGPARAMS;
+    /* Validate the port and module ID */
+    if (dstPort == 0 && dstModule == myID) {
+        return H2BR1_ERR_WRONGPARAMS;
+    }
 
-	/* Process data based on the requested sensor type */
-	switch (dataFunction) {
-	case HR:
-		/* Sample heart rate data */
-		status = HR_Sample(&hrValue);
+    /* Process data based on the requested sensor type */
+    switch (dataFunction) {
+        case HR:
+            /* Sample heart rate data */
+            status = HR_Sample(&hrValue);
 
-		/* If data is to be sent locally */
-		if (dstModule == myID || dstModule == 0)
-			writePxITMutex(dstPort, (char*) &hrValue, sizeof(uint8_t), 10);
-		else {
-			/* Send data to another module */
-			MessageParams[1] = (status == H2BR1_OK) ? BOS_OK : BOS_ERROR;
-			MessageParams[0] = FMT_UINT8;
-			MessageParams[2] = 1;
-			MessageParams[3] = hrValue;
-			SendMessageToModule(dstModule, CODE_READ_RESPONSE,
-					sizeof(uint8_t) + 3);
-		}
-		break;
+            /* If data is to be sent locally */
+            if (dstModule == myID) {
+                writePxITMutex(dstPort, (char*)&hrValue, sizeof(uint8_t), 10);
+            } else {
+                /* Send data to another module */
+                MessageParams[0] = FMT_UINT8;                                   /* Data format: uint8 */
+                MessageParams[1] = (status == H2BR1_OK) ? BOS_OK : BOS_ERROR;  /* Operation status */
+                MessageParams[2] = 1;                                          /* Number of elements (hrValue) */
+                MessageParams[3] = (uint8_t)(CODE_H2BR1_HR_Sample >> 0);      /* Command code LSB */
+                MessageParams[4] = (uint8_t)(CODE_H2BR1_HR_Sample >> 8);      /* Command code MSB */
+                MessageParams[5] = hrValue;                                   /* Heart rate value */
+                SendMessageToModule(dstModule, CODE_READ_RESPONSE, sizeof(uint8_t) + 5);
+            }
+            break;
 
-	case SPO2:
-		/* Sample oxygen saturation data */
-		status = SPO2_Sample(&spo2Value);
+        case SPO2:
+            /* Sample oxygen saturation data */
+            status = SPO2_Sample(&spo2Value);
 
-		/* If data is to be sent locally */
-		if (dstModule == myID || dstModule == 0)
-			writePxITMutex(dstPort, (char*) &spo2Value, sizeof(uint8_t), 10);
-		else {
-			/* Send data to another module */
-			MessageParams[1] = (status == H2BR1_OK) ? BOS_OK : BOS_ERROR;
-			MessageParams[0] = FMT_UINT8;
-			MessageParams[2] = 1;
-			MessageParams[3] = spo2Value;
-			SendMessageToModule(dstModule, CODE_READ_RESPONSE, sizeof(uint8_t) + 3);
-		}
-		break;
+            /* If data is to be sent locally */
+            if (dstModule == myID) {
+                writePxITMutex(dstPort, (char*)&spo2Value, sizeof(uint8_t), 10);
+            } else {
+                /* Send data to another module */
+                MessageParams[0] = FMT_UINT8;                                   /* Data format: uint8 */
+                MessageParams[1] = (status == H2BR1_OK) ? BOS_OK : BOS_ERROR;  /* Operation status */
+                MessageParams[2] = 1;                                          /* Number of elements (spo2Value) */
+                MessageParams[3] = (uint8_t)(CODE_H2BR1_SPO2_Sample >> 0);    /* Command code LSB */
+                MessageParams[4] = (uint8_t)(CODE_H2BR1_SPO2_Sample >> 8);    /* Command code MSB */
+                MessageParams[5] = spo2Value;                                 /* Oxygen saturation value */
+                SendMessageToModule(dstModule, CODE_READ_RESPONSE, sizeof(uint8_t) + 5);
+            }
+            break;
 
-	default:
-		status = H2BR1_ERR_WRONGPARAMS;
-		break;
-	}
+        default:
+            status = H2BR1_ERR_WRONGPARAMS;
+            break;
+    }
 
-	return status;
+    return status;
 }
 
 /***************************************************************************/
