@@ -11,7 +11,7 @@
 /* Exported macros -----------------------------------------------------------*/
 
 //I2C_HandleTypeDef HANDLER_I2C_MAX30100;
-#define HANDLER_I2C_MAX30100  hi2c2
+//#define HANDLER_I2C_MAX30100  hi2c2
 
 #define MAX30100_I2C_ADDRESS         0xAE
 #define MAX30100_SAMPLE_SIZE		 4
