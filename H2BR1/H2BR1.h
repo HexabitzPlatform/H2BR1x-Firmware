@@ -1,5 +1,5 @@
 /*
- BitzOS (BOS) V0.3.6 - Copyright (C) 2017-2024 Hexabitz
+ BitzOS (BOS) V0.4.0 - Copyright (C) 2017-2025 Hexabitz
  All rights reserved
  
  File Name     : H2BR1.h
@@ -10,14 +10,13 @@
 >>
 >>
 >>
-
  */
 
-/* Define to prevent recursive inclusion -------------------------------------*/
+/* Define to prevent recursive inclusion ***********************************/
 #ifndef H2BR1_H
 #define H2BR1_H
 
-/* Includes ------------------------------------------------------------------*/
+/* Includes ****************************************************************/
 #include "BOS.h"
 #include "H2BR1_MemoryMap.h"
 #include "H2BR1_uart.h"
@@ -26,41 +25,36 @@
 #include "H2BR1_inputs.h"
 #include "H2BR1_eeprom.h"
 #include "MAX30100_reg_address.h"
-/* Exported definitions -------------------------------------------------------*/
 
-#define	modulePN		_H2BR1
+/* Exported Macros *********************************************************/
+#define	MODULE_PN		_H2BR1
 
+/* Port-related Definitions */
+#define	NUM_OF_PORTS	5
+#define P_PROG 			P2		/* ST factory bootloader UART */
 
-/* Port-related definitions */
-#define	NumOfPorts			5
+/* Define Available ports */
+#define _P1
+#define _P2
+#define _P3
+#define _P4
+#define _P5
 
-#define P_PROG 				P2						/* ST factory bootloader UART */
-
-/* Define available ports */
-#define _P1 
-#define _P2 
-#define _P3 
-#define _P4 
-#define _P5 
-
-
-/* Define available USARTs */
-#define _Usart1 1
-#define _Usart2 1
-#define _Usart3 1
-#define _Usart5 1
-#define _Usart6	1
-
+/* Define Available USARTs */
+#define _USART1
+#define _USART2
+#define _USART3
+#define _USART4
+#define _USART5
 
 /* Port-UART mapping */
-#define P1uart &huart6
-#define P2uart &huart2
-#define P3uart &huart3
-#define P4uart &huart1
-#define P5uart &huart5
+#define UART_P1 &huart4
+#define UART_P2 &huart2
+#define UART_P3 &huart3
+#define UART_P4 &huart1
+#define UART_P5 &huart5
 
-
-
+/* Module-specific Hardware Definitions ************************************/
 /* Port Definitions */
 #define	USART1_TX_PIN		GPIO_PIN_9
 #define	USART1_RX_PIN		GPIO_PIN_10
@@ -80,101 +74,86 @@
 #define	USART3_RX_PORT		GPIOB
 #define	USART3_AF			GPIO_AF4_USART3
 
+#define	USART4_TX_PIN		GPIO_PIN_0
+#define	USART4_RX_PIN		GPIO_PIN_1
+#define	USART4_TX_PORT		GPIOA
+#define	USART4_RX_PORT		GPIOA
+#define	USART4_AF			GPIO_AF4_USART4
+
 #define	USART5_TX_PIN		GPIO_PIN_3
 #define	USART5_RX_PIN		GPIO_PIN_2
 #define	USART5_TX_PORT		GPIOD
 #define	USART5_RX_PORT		GPIOD
 #define	USART5_AF			GPIO_AF3_USART5
 
-#define	USART6_TX_PIN		GPIO_PIN_8
-#define	USART6_RX_PIN		GPIO_PIN_9
-#define	USART6_TX_PORT		GPIOB
-#define	USART6_RX_PORT		GPIOB
-#define	USART6_AF			GPIO_AF8_USART6
+/* SPO2 External Interrupt Pin */
+#define SPO2_EXT_INT_PIN    GPIO_PIN_7
+#define SPO2_EXT_INT_PORT   GPIOB
 
+/* I2C Pin Definition */
+#define SENSOR_I2C_SCL_PIN  GPIO_PIN_3
+#define SENSOR_I2C_SDA_PIN  GPIO_PIN_4
+#define SENSOR_I2C_PORT     GPIOB
 
-/* Module-specific Definitions */
+#define I2C_HANDLER         &hi2c2
 
 /* Indicator LED */
-#define _IND_LED_PORT			GPIOA
-#define _IND_LED_PIN			GPIO_PIN_5
+#define _IND_LED_PORT		GPIOB
+#define _IND_LED_PIN		GPIO_PIN_13
 
-#define NUM_MODULE_PARAMS		1
+/* Module-specific Macro Definitions ***************************************/
+#define NUM_MODULE_PARAMS		 3
 
+/* Streaming Parameters */
+#define MIN_PERIOD_MS		     100
+#define MAX_TIMEOUT_MS		     0xFFFFFFFF
+#define STREAM_MODE_TO_PORT      1
+#define STREAM_MODE_TO_TERMINAL  2
 
-/* Module EEPROM Variables */
-// Module Addressing Space 500 - 599
-#define _EE_MODULE							500		
-
-#define MIN_MEMS_PERIOD_MS				100
-#define MAX_MEMS_TIMEOUT_MS				0xFFFFFFFF
-
-#define STREAM_TO_PORT          1
-#define STREAM_TO_Terminal      2
-#define DEFAULT                 4
-/* EXG Module_Status Type Definition */
+/* Module-specific Type Definition *****************************************/
+/* Module-status Type Definition */
 typedef enum {
 	H2BR1_OK =0,
 	H2BR1_ERR_UNKNOWNMESSAGE,
 	H2BR1_ERR_WRONGPARAMS,
 	H2BR1_ERR_TERMINATED,
-	H2BR1_ERR_WrongParams,
 	H2BR1_ERROR =255
 } Module_Status;
 
-extern I2C_HandleTypeDef hi2c2;
-
-typedef enum
-{
-	HR = 0,
-	SPO2 ,
-} Sensor;
-
-extern  MAX30100_s MaxStruct;
+/* SPO2 Signal type */
+typedef enum {
+	HR = 0, SPO2,
+} All_Data;
 
 /* Export UART variables */
 extern UART_HandleTypeDef huart1;
 extern UART_HandleTypeDef huart2;
 extern UART_HandleTypeDef huart3;
+extern UART_HandleTypeDef huart4;
 extern UART_HandleTypeDef huart5;
-extern UART_HandleTypeDef huart6;
 
 /* Define UART Init prototypes */
 extern void MX_USART1_UART_Init(void);
 extern void MX_USART2_UART_Init(void);
 extern void MX_USART3_UART_Init(void);
+extern void MX_USART4_UART_Init(void);
 extern void MX_USART5_UART_Init(void);
-extern void MX_USART6_UART_Init(void);
 extern void SystemClock_Config(void);
-extern void ExecuteMonitor(void);
 
-/* -----------------------------------------------------------------------
- |								  APIs							          ||
-/* -----------------------------------------------------------------------
- */
-
-void SetupPortForRemoteBootloaderUpdate(uint8_t port);
-void remoteBootloaderUpdate(uint8_t src,uint8_t dst,uint8_t inport,uint8_t outport);
-
+/***************************************************************************/
+/***************************** General Functions ***************************/
+/***************************************************************************/
 Module_Status HR_Sample(uint8_t *heartRate);
 Module_Status SPO2_Sample(uint8_t *SPO2);
 Module_Status FingerState(FINGER_STATE *fingerState);
-Module_Status PlotToTerminal(uint8_t port, MAX30100_MODE mode);
-Module_Status HR_ReadBuffer(uint16_t *irSampleBuffer);
-Module_Status SPO2_ReadBuffer(uint16_t *redSampleBuffer, uint16_t *irSampleBuffer);
 Module_Status SampleReadFlag(uint8_t *sampleReadFlag);
-Module_Status ResetSampleReadFlag();
-Module_Status SampletoPort(uint8_t module,uint8_t port, Sensor Sensor);
-Module_Status StreamtoPort(uint8_t module,uint8_t port,Sensor Sensor,uint32_t Numofsamples,uint32_t timeout);
-Module_Status StreamToTerminal(uint8_t port,Sensor Sensor,uint32_t Numofsamples,uint32_t timeout);
-/* -----------------------------------------------------------------------
- |								Commands							      ||
-/* -----------------------------------------------------------------------
- */
-extern const CLI_Command_Definition_t CLI_HR_SampleCommandDefinition;
-extern const CLI_Command_Definition_t CLI_SPO2_SampleCommandDefinition;
-extern const CLI_Command_Definition_t CLI_FingerStateCommandDefinition;
+Module_Status ResetSampleReadFlag(void);
+
+Module_Status SampleToPort(uint8_t dstModule, uint8_t dstPort, All_Data dataFunction);
+Module_Status StreamToPort(uint8_t dstModule,uint8_t dstPort,All_Data dataFunction,uint32_t numOfSamples,uint32_t streamTimeout);
+Module_Status StreamToTerminal(uint8_t dstPort,All_Data dataFunction,uint32_t numOfSamples,uint32_t streamTimeout);
+Module_Status StreamToBuffer(float *buffer, All_Data function, uint32_t Numofsamples, uint32_t timeout) ;
 
 #endif /* H2BR1_H */
 
-/************************ (C) COPYRIGHT HEXABITZ *****END OF FILE****/
+/***************** (C) COPYRIGHT HEXABITZ ***** END OF FILE ****************/
