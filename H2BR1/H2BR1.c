@@ -592,11 +592,11 @@ Module_Status Module_MessagingTask(uint16_t code, uint8_t port, uint8_t src, uin
 
 	switch (code) {
 
-	case CODE_H2BR1_HR_Sample:
+	case CODE_H2BR1_HR_SAMPLE:
 		SampleToPort(cMessage[port - 1][shift], cMessage[port - 1][1 + shift], HR);
 		break;
 
-	case CODE_H2BR1_SPO2_Sample:
+	case CODE_H2BR1_SPO2_SAMPLE:
 		SampleToPort(cMessage[port - 1][shift], cMessage[port - 1][1 + shift], SPO2);
 		break;
 
@@ -1326,8 +1326,8 @@ Module_Status SampleToPort(uint8_t dstModule, uint8_t dstPort, All_Data dataFunc
                 MessageParams[0] = FMT_UINT8;                                   /* Data format: uint8 */
                 MessageParams[1] = (status == H2BR1_OK) ? BOS_OK : BOS_ERROR;  /* Operation status */
                 MessageParams[2] = 1;                                          /* Number of elements (hrValue) */
-                MessageParams[3] = (uint8_t)(CODE_H2BR1_HR_Sample >> 0);      /* Command code LSB */
-                MessageParams[4] = (uint8_t)(CODE_H2BR1_HR_Sample >> 8);      /* Command code MSB */
+                MessageParams[3] = (uint8_t)(CODE_H2BR1_HR_SAMPLE >> 0);      /* Command code LSB */
+                MessageParams[4] = (uint8_t)(CODE_H2BR1_HR_SAMPLE >> 8);      /* Command code MSB */
                 MessageParams[5] = hrValue;                                   /* Heart rate value */
                 SendMessageToModule(dstModule, CODE_READ_RESPONSE, sizeof(uint8_t) + 5);
             }
@@ -1345,8 +1345,8 @@ Module_Status SampleToPort(uint8_t dstModule, uint8_t dstPort, All_Data dataFunc
                 MessageParams[0] = FMT_UINT8;                                   /* Data format: uint8 */
                 MessageParams[1] = (status == H2BR1_OK) ? BOS_OK : BOS_ERROR;  /* Operation status */
                 MessageParams[2] = 1;                                          /* Number of elements (spo2Value) */
-                MessageParams[3] = (uint8_t)(CODE_H2BR1_SPO2_Sample >> 0);    /* Command code LSB */
-                MessageParams[4] = (uint8_t)(CODE_H2BR1_SPO2_Sample >> 8);    /* Command code MSB */
+                MessageParams[3] = (uint8_t)(CODE_H2BR1_SPO2_SAMPLE >> 0);    /* Command code LSB */
+                MessageParams[4] = (uint8_t)(CODE_H2BR1_SPO2_SAMPLE >> 8);    /* Command code MSB */
                 MessageParams[5] = spo2Value;                                 /* Oxygen saturation value */
                 SendMessageToModule(dstModule, CODE_READ_RESPONSE, sizeof(uint8_t) + 5);
             }
