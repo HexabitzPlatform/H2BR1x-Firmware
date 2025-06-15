@@ -2,15 +2,11 @@
  BitzOS (BOS) V0.4.0 - Copyright (C) 2017-2025 Hexabitz
  All rights reserved
 
- File Name     : H2BR1.c
- Description   : Source code for module H2BR1.
- 	 	 	 	 (Description_of_module)
-
-(Description of Special module peripheral configuration):
->>
->>
->>
- */
+ File Name  : H2BR1.c
+ Description: Main source code for H2BR1 module, interfacing with MAX30100 sensor for heart rate and SpO2 measurement.
+ Peripherals: Configures USART1-5 for module ports (P1-P5), I2C2 for MAX30100 communication, GPIO for external interrupt, and software timer for streaming.
+ Features: Measures heart rate (bpm), SpO2 (%), and finger presence using MAX30100. Supports data streaming to ports or terminal, CLI commands for sampling, remote bootloader updates, and power modes (stop/standby).
+*/
 
 /* Includes ****************************************************************/
 #include "BOS.h"

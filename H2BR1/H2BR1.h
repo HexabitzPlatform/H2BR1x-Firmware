@@ -1,16 +1,12 @@
 /*
  BitzOS (BOS) V0.4.0 - Copyright (C) 2017-2025 Hexabitz
  All rights reserved
- 
- File Name     : H2BR1.h
- Description   : Header file for module H2BR1.
- 	 	 	 	 (Description_of_module)
 
-(Description of Special module peripheral configuration):
->>
->>
->>
- */
+ File Name  : H2BR1.h
+ Description: Header file for H2BR1 module.
+ Peripherals: Defines USART1-5 for ports (P1-P5), I2C2 for MAX30100, GPIO for interrupt and LED, and MAX30100 register mappings.
+ Features: Declares functions for heart rate, SpO2, and finger state sampling, data streaming (port/terminal/buffer), UART/I2C/GPIO/DMA/EEPROM configurations, and CLI command prototypes.
+*/
 
 /* Define to prevent recursive inclusion ***********************************/
 #ifndef H2BR1_H

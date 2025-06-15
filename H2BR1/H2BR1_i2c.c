@@ -2,11 +2,12 @@
  BitzOS (BOS) V0.4.0 - Copyright (C) 2017-2025 Hexabitz
  All rights reserved
 
- File Name     : H2BR1_i2c.c
- Description   : This file provides code for the configuration
- of the I2C instances.
-
- */
+ File Name  : H2BR1_i2c.c
+ Description: Source code for I2C configuration on H2BR1 module.
+ Peripherals: Configures I2C2 for communication with MAX30100 sensor.
+ Features: Initializes I2C2 in master mode (100 kHz, 7-bit addressing), sets up GPIOs (PB3-SCL, PB4-SDA),
+           provides functions for writing and reading data to/from MAX30100 sensor.
+*/
 
 /* Includes ****************************************************************/
 #include "BOS.h"
