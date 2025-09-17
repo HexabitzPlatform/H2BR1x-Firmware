@@ -100,12 +100,6 @@
 /* Module-specific Macro Definitions ***************************************/
 #define NUM_MODULE_PARAMS		 3
 
-/* Streaming Parameters */
-#define MIN_PERIOD_MS		     100
-#define MAX_TIMEOUT_MS		     0xFFFFFFFF
-#define STREAM_MODE_TO_PORT      1
-#define STREAM_MODE_TO_TERMINAL  2
-
 /* Module-specific Type Definition *****************************************/
 /* Module-status Type Definition */
 typedef enum {
@@ -144,11 +138,6 @@ Module_Status SPO2_Sample(uint8_t *SPO2);
 Module_Status FingerState(FINGER_STATE *fingerState);
 Module_Status SampleReadFlag(uint8_t *sampleReadFlag);
 Module_Status ResetSampleReadFlag(void);
-
-Module_Status SampleToPort(uint8_t dstModule, uint8_t dstPort, All_Data dataFunction);
-Module_Status StreamToPort(uint8_t dstModule,uint8_t dstPort,All_Data dataFunction,uint32_t numOfSamples,uint32_t streamTimeout);
-Module_Status StreamToTerminal(uint8_t dstPort,All_Data dataFunction,uint32_t numOfSamples,uint32_t streamTimeout);
-Module_Status StreamToBuffer(float *buffer, All_Data function, uint32_t Numofsamples, uint32_t timeout) ;
 
 #endif /* H2BR1_H */
 

@@ -24,21 +24,7 @@ UART_HandleTypeDef huart5;
 All_Data PortFunction;
 MAX30100_s MaxStruct;
 
-
-TimerHandle_t xTimerStream = NULL;
-
 /* Private Variables *******************************************************/
-/* Streaming variables */
-static bool stopStream = false;         /* Flag to indicate whether to stop streaming process */
-uint8_t PortModule = 0u;                /* Module ID for the destination port */
-uint8_t PortNumber = 0u;                /* Physical port number used for streaming */
-uint8_t StreamMode = 0u;                /* Current active streaming mode (to port, terminal, etc.) */
-uint8_t TerminalPort = 0u;              /* Port number used to output data to a terminal */
-uint8_t StopeCliStreamFlag = 0u;        /* Flag to request stopping a CLI stream operation */
-uint32_t SampleCount = 0u;              /* Counter to track the number of samples streamed */
-uint32_t PortNumOfSamples = 0u;         /* Total number of samples to be sent through the port */
-uint32_t TerminalNumOfSamples = 0u;     /* Total number of samples to be streamed to the terminal */
-
 
 /* Global variables for sensor data used in ModuleParam */
 uint8_t H2BR1_heartRate = 0;
@@ -87,60 +73,9 @@ void Oxymeter_Modify_Led_Current_Bias();
 void Read_Data_When_Interrupt(void);
 void Oxymeter_Calculating_HR_SPO2(void);
 
-/* Stream Functions */
-void StreamTimeCallback(TimerHandle_t xTimerStream);
-
-void SampleHRToString(char *cstring, size_t maxLen);
-void SampleSPO2ToString(char *cstring, size_t maxLen);
-
-Module_Status SampleToTerminal(uint8_t dstPort, All_Data mode);
-Module_Status ExportStreanToPort (uint8_t module,uint8_t port,All_Data Sensor,uint32_t Numofsamples,uint32_t timeout);
-
-static Module_Status PollingSleepCLISafe(uint32_t period, long Numofsamples);
-static Module_Status StreamToCLI(uint32_t Numofsamples, uint32_t timeout, SampleToString function);
-static bool StreamCommandParser(const int8_t *pcCommandString, const char **ppSensName, portBASE_TYPE *pSensNameLen,
-		bool *pPortOrCLI, uint32_t *pPeriod, uint32_t *pTimeout, uint8_t *pPort, uint8_t *pModule);
-
 /* Create CLI commands *****************************************************/
-portBASE_TYPE CLI_HR_SampleCommand( int8_t *pcWriteBuffer, size_t xWriteBufferLen, const int8_t *pcCommandString );
-portBASE_TYPE CLI_SPO2_SampleCommand( int8_t *pcWriteBuffer, size_t xWriteBufferLen, const int8_t *pcCommandString );
-portBASE_TYPE CLI_FingerStateCommand( int8_t *pcWriteBuffer, size_t xWriteBufferLen, const int8_t *pcCommandString );
-portBASE_TYPE StreamSPO2Command( int8_t *pcWriteBuffer, size_t xWriteBufferLen, const int8_t *pcCommandString );
 
 /* CLI command structure ***************************************************/
-/* CLI command structure : HR_Sample */
-const CLI_Command_Definition_t CLI_HR_SampleCommandDefinition = {
-	( const int8_t * ) "hrsample", /* The command string to type. */
-	( const int8_t * ) "hrsample:\r\nTake one sample measurement to measure heart rate after 6 seconds from placing the hand on the sensor.\r\n\r\n",
-	CLI_HR_SampleCommand, /* The function to run. */
-	0 /* zero parameters are expected. */
-};
-
-/***************************************************************************/
-/* CLI command structure : SPO2_Sample */
-const CLI_Command_Definition_t CLI_SPO2_SampleCommandDefinition = {
-	( const int8_t * ) "spo2sample", /* The command string to type. */
-	( const int8_t * ) "spo2sample:\r\nTake one sample measurement to measure oxygenation rate after 6 seconds from placing the hand on the sensor.\r\n\r\n",
-	CLI_SPO2_SampleCommand, /* The function to run. */
-	0 /* zero parameters are expected. */
-};
-
-/***************************************************************************/
-const CLI_Command_Definition_t StreamCommandDefinition = {
-	(const int8_t *) "stream",
-	(const int8_t *) "stream:\r\n Syntax: stream [EMG]/[EEG]/[EOG]/[ECG] (Numofsamples ) (time in ms) [port] [module].\r\n\r\n",
-	StreamSPO2Command,
-	-1
-};
-
-/***************************************************************************/
-/* CLI command structure : FingerState */
-const CLI_Command_Definition_t CLI_FingerStateCommandDefinition = {
-	( const int8_t * ) "fingerstate", /* The command string to type. */
-	( const int8_t * ) "fingerstate:\r\nFeel the presence of a finger on or near the sensor.\r\n\r\n",
-	CLI_FingerStateCommand, /* The function to run. */
-	0 /* zero parameters are expected. */
-};
 
 /***************************************************************************/
 /************************ Private function Definitions *********************/
@@ -540,13 +475,13 @@ void SetupPortForRemoteBootloaderUpdate(uint8_t port){
 	__HAL_UART_ENABLE_IT(huart,UART_IT_RXNE);
 
 }
-Module_Status Y ;
+
 /***************************************************************************/
 /* H2BR1 module initialization */
 void Module_Peripheral_Init(void) {
 
-//	 __HAL_RCC_GPIOB_CLK_ENABLE();
-//	 __HAL_RCC_GPIOA_CLK_ENABLE();
+	 __HAL_RCC_GPIOB_CLK_ENABLE();
+	 __HAL_RCC_GPIOA_CLK_ENABLE();
 
 	/* Array ports */
 	MX_USART1_UART_Init();
@@ -557,7 +492,7 @@ void Module_Peripheral_Init(void) {
 
 	SPO2GPIOInit();
 	MX_I2C_Init();
-	Y=Init_MAX30100();
+	Init_MAX30100();
 
 	/* Circulating DMA Channels ON All Module */
 	for (int i = 1; i <= NUM_OF_PORTS; i++) {
@@ -574,8 +509,6 @@ void Module_Peripheral_Init(void) {
 		}
 	}
 
-	/* Create a timeout software timer StreamSamplsToPort() API */
-	xTimerStream = xTimerCreate("StreamTimer", pdMS_TO_TICKS(1000), pdTRUE, (void*) 1, StreamTimeCallback);
 
 }
 
@@ -583,22 +516,10 @@ void Module_Peripheral_Init(void) {
 /*  H2BR1 message processing task */
 Module_Status Module_MessagingTask(uint16_t code, uint8_t port, uint8_t src, uint8_t dst, uint8_t shift) {
 	Module_Status result = H2BR1_OK;
-	uint8_t fingerState = 0;
-	uint8_t module = 0;
+
 
 	switch (code) {
 
-	case CODE_H2BR1_HR_SAMPLE:
-		SampleToPort(cMessage[port - 1][shift], cMessage[port - 1][1 + shift], HR);
-		break;
-
-	case CODE_H2BR1_SPO2_SAMPLE:
-		SampleToPort(cMessage[port - 1][shift], cMessage[port - 1][1 + shift], SPO2);
-		break;
-
-	default:
-		result = H2BR1_ERR_UNKNOWNMESSAGE;
-		break;
 	}
 
 	return result;
@@ -625,10 +546,7 @@ uint8_t GetPort(UART_HandleTypeDef *huart){
 /***************************************************************************/
 /* Register this module CLI Commands */
 void RegisterModuleCLICommands(void){
-	FreeRTOS_CLIRegisterCommand(&StreamCommandDefinition);
-	FreeRTOS_CLIRegisterCommand(&CLI_HR_SampleCommandDefinition);
-	FreeRTOS_CLIRegisterCommand(&CLI_SPO2_SampleCommandDefinition);
-	FreeRTOS_CLIRegisterCommand(&CLI_FingerStateCommandDefinition);
+
 }
 
 /***************************************************************************/
@@ -676,95 +594,6 @@ Module_Status GetModuleParameter(uint8_t paramIndex, float *value) {
 
 /***************************************************************************/
 /****************************** Local Functions ****************************/
-/***************************************************************************/
-/* Callback function triggered by a timer to manage data streaming.
- * xTimerStream: Handle of the timer that triggered the callback.
- */
-void StreamTimeCallback(TimerHandle_t xTimerStream) {
-
-	uint32_t SampleCount = 0u;                   /* Total sample counter */
-
-	/* Increment sample counter */
-	++SampleCount;
-
-	/* Stream mode to port: Send samples to port */
-	if (STREAM_MODE_TO_PORT == StreamMode) {
-		if ((SampleCount <= PortNumOfSamples) || (0 == PortNumOfSamples)) {
-			SampleToPort(PortModule, PortNumber, PortFunction);
-
-		} else {
-			SampleCount = 0;
-			xTimerStop(xTimerStream, 0);
-		}
-	}
-
-	/* Stream mode to terminal: Export to terminal */
-	else if (STREAM_MODE_TO_TERMINAL == StreamMode) {
-		if ((SampleCount <= TerminalNumOfSamples)
-				|| (0 == TerminalNumOfSamples)) {
-			SampleToTerminal(TerminalPort, PortFunction);
-		} else {
-			SampleCount = 0;
-			xTimerStop(xTimerStream, 0);
-		}
-	}
-}
-/***************************************************************************/
-/* Samples heart rate data into a buffer.
- * buffer: Pointer to the buffer where heart rate data will be stored.
- */
-void SampleHRBuf(float *buffer) {
-    uint8_t heartRate;
-    HR_Sample(&heartRate);
-    *buffer = (float)heartRate;
-}
-
-/***************************************************************************/
-/* Samples SpO2 data into a buffer.
- * buffer: Pointer to the buffer where SpO2 data will be stored.
- */
-void SampleSPO2Buf(float *buffer) {
-    uint8_t spo2;
-    SPO2_Sample(&spo2);
-    *buffer = (float)spo2;
-}
-/***************************************************************************/
-/* Streams sensor data to a buffer.
- * buffer: Pointer to the buffer where data will be stored.
- * Numofsamples: Number of samples to take.
- * timeout: Timeout period for the operation.
- * function: Function pointer to the sampling function (e.g., SampleHRBuf, SampleSPO2Buf).
- */
-static Module_Status StreamToBuf(float *buffer, uint32_t Numofsamples, uint32_t timeout, SampleToBuffer function) {
-    Module_Status status = H2BR1_OK;
-    uint16_t StreamIndex = 0;
-    uint32_t period = timeout / Numofsamples;
-
-    /* Check if the calculated period is valid */
-    if (period < MIN_PERIOD_MS)
-        return H2BR1_ERR_WRONGPARAMS;
-
-    stopStream = false;
-
-    /* Stream data to buffer */
-    while ((Numofsamples-- > 0) || (timeout >= MAX_TIMEOUT_MS)) {
-        float sample;
-        function(&sample);
-        buffer[StreamIndex] = sample;
-        StreamIndex++;
-
-        /* Delay for the specified period */
-        vTaskDelay(pdMS_TO_TICKS(period));
-
-        /* Check if streaming should be stopped */
-        if (stopStream) {
-            status = H2BR1_ERR_TERMINATED;
-            break;
-        }
-    }
-
-    return status;
-}
 /***************************************************************************/
 void MAX30100_Reset(void) {
 	uint8_t modeConfReg = 0;
@@ -1045,7 +874,7 @@ void Oxymeter_Signal_Processing() {
 	MaxStruct.processTimeMs = MaxStruct.processEndTick - MaxStruct.processStartTick;
 }
 
-/***************************************************************************/
+/*************************** *****   ******************************************/
 /* This function should put within external interrupt function */
 void Read_Data_When_Interrupt(void) {
 	uint8_t interruptReg = 0;
@@ -1094,136 +923,6 @@ Module_Status Init_MAX30100(void) {
 		status = H2BR1_OK;
 	else
 		status = H2BR1_ERR_WRONGPARAMS;
-
-	return status;
-}
-
-/***************************************************************************/
-/* Streams heart rate (HR) or oxygen saturation (SPO2) samples to the terminal.
- * dstPort: The port number used for data transmission.
- * mode: The mode of operation (HR_MODE for heart rate, SPO2_MODE for oxygenation).
- */
-Module_Status SampleToTerminal(uint8_t dstPort, All_Data mode) {
-	Module_Status status = H2BR1_OK; /* Initialize operation status as success */
-	char formattedString[20]; /* Buffer for formatted output string */
-
-	/* Validate the port number */
-	if (dstPort == 0)
-		return H2BR1_ERR_WRONGPARAMS; /* Return error for invalid port */
-
-	/* Process data based on the selected mode */
-	switch (mode) {
-	case HR:
-		/* Check if new IR data is available */
-		if (MaxStruct.dataReadingFlag1 == 1) {
-			MaxStruct.dataReadingFlag1 = 0;
-			/* Loop through IR samples and send them to the terminal */
-			for (uint8_t i = 0; i < MAX30100_FIFO_SAMPLES_SIZE; i++) {
-				snprintf(formattedString, sizeof(formattedString), "i%d\r\n", MaxStruct.irSamples[i]);
-				HAL_UART_Transmit(GetUart(dstPort), (uint8_t*) formattedString, strlen(formattedString), 100);
-			}
-		}
-		break;
-
-	case SPO2:
-		/* Check if new IR and RED data is available */
-		if (MaxStruct.dataReadingFlag1 == 1) {
-			MaxStruct.dataReadingFlag1 = 0;
-			/* Loop through IR and RED samples and send them to the terminal */
-			for (uint8_t i = 0; i < MAX30100_FIFO_SAMPLES_SIZE; i++) {
-				snprintf(formattedString, sizeof(formattedString), "i%dr%d\r\n", MaxStruct.irSamples[i], MaxStruct.redSamples[i]);
-				HAL_UART_Transmit(GetUart(dstPort), (uint8_t*) formattedString, strlen(formattedString), 100);
-			}
-		}
-		break;
-
-	default:
-		status = H2BR1_ERR_WRONGPARAMS;
-		break;
-	}
-
-	return status;
-}
-
-/***************************************************************************/
-void SampleHRToString(char *cstring, size_t maxLen) {
-	uint8_t heartRate;
-	HR_Sample(&heartRate);
-	snprintf(cstring, maxLen, "HeartRate: %d \r\n", heartRate);
-}
-
-/***************************************************************************/
-void SampleSPO2ToString(char *cstring, size_t maxLen) {
-	uint8_t SPO2;
-	SPO2_Sample(&SPO2);
-	snprintf(cstring, maxLen, "SPO2: %d \r\n", SPO2);
-}
-
-/***************************************************************************/
-static Module_Status PollingSleepCLISafe(uint32_t period, long Numofsamples) {
-	const unsigned DELTA_SLEEP_MS = 100;
-	long numDeltaDelay = period / DELTA_SLEEP_MS;
-	unsigned lastDelayMS = period % DELTA_SLEEP_MS;
-
-	while (numDeltaDelay-- > 0) {
-		vTaskDelay(pdMS_TO_TICKS(DELTA_SLEEP_MS));
-
-		/* Look for ENTER key to stop the stream */
-		for (uint8_t chr = 1; chr < MSG_RX_BUF_SIZE; chr++) {
-			if (UARTRxBuf[pcPort - 1][chr] == '\r') {
-				UARTRxBuf[pcPort - 1][chr] = 0;
-				StopeCliStreamFlag = 1;
-				return H2BR1_ERR_TERMINATED;
-			}
-		}
-
-		if (stopStream)
-			return H2BR1_ERR_TERMINATED;
-	}
-
-	vTaskDelay(pdMS_TO_TICKS(lastDelayMS));
-	return H2BR1_OK;
-}
-
-/***************************************************************************/
-static Module_Status StreamToCLI(uint32_t Numofsamples, uint32_t timeout, SampleToString function) {
-	Module_Status status = H2BR1_OK;
-	int8_t *pcOutputString = NULL;
-	uint32_t period = timeout / Numofsamples;
-	long numTimes = timeout / period;
-
-	if (period < MIN_PERIOD_MS)
-		return H2BR1_ERR_WRONGPARAMS;
-
-	for (uint8_t chr = 0; chr < MSG_RX_BUF_SIZE; chr++) {
-		if (UARTRxBuf[pcPort - 1][chr] == '\r') {
-			UARTRxBuf[pcPort - 1][chr] = 0;
-		}
-	}
-
-	if (1 == StopeCliStreamFlag) {
-		StopeCliStreamFlag = 0;
-		static char *pcOKMessage = (int8_t*) "Stop stream !\n\r";
-		writePxITMutex(pcPort, pcOKMessage, strlen(pcOKMessage), 10);
-		return status;
-	}
-
-	if (period > timeout)
-		timeout = period;
-
-	stopStream = false;
-
-	while ((numTimes-- > 0) || (timeout >= MAX_TIMEOUT_MS)) {
-		pcOutputString = FreeRTOS_CLIGetOutputBuffer();
-		function((char*) pcOutputString, 100);
-
-		writePxMutex(pcPort, (char*) pcOutputString, strlen((char*) pcOutputString), cmd500ms, HAL_MAX_DELAY);
-		if (PollingSleepCLISafe(period, Numofsamples) != H2BR1_OK)
-			break;
-	}
-
-	memset((char*) pcOutputString, 0, configCOMMAND_INT_MAX_OUTPUT_SIZE);
-	sprintf((char*) pcOutputString, "\r\n");
 
 	return status;
 }
@@ -1290,334 +989,9 @@ Module_Status SPO2_Sample(uint8_t *SPO2) {
 }
 
 /***************************************************************************/
-/*
- * @brief: Samples data from a heart rate (HR) or oxygen saturation (SPO2) sensor
- *         and exports it to a specified port or module.
- * @param dstModule: The module number to export data to.
- * @param dstPort: The port number to export data to.
- * @param dataFunction: The type of sensor (HR for heart rate, SPO2 for oxygen saturation).
- * @retval: Module status indicating success or failure of the operation.
- */
-Module_Status SampleToPort(uint8_t dstModule, uint8_t dstPort, All_Data dataFunction) {
-    uint8_t hrValue = 0; /* Variable to store heart rate sample */
-    uint8_t spo2Value = 0; /* Variable to store oxygen saturation sample */
-    Module_Status status = H2BR1_OK; /* Initialize operation status as success */
-
-    /* Validate the port and module ID */
-    if (dstPort == 0 && dstModule == myID) {
-        return H2BR1_ERR_WRONGPARAMS;
-    }
-
-    /* Process data based on the requested sensor type */
-    switch (dataFunction) {
-        case HR:
-            /* Sample heart rate data */
-            status = HR_Sample(&hrValue);
-
-            /* If data is to be sent locally */
-            if (dstModule == myID) {
-                writePxITMutex(dstPort, (char*)&hrValue, sizeof(uint8_t), 10);
-            } else {
-                /* Send data to another module */
-                MessageParams[0] = FMT_UINT8;                                   /* Data format: uint8 */
-                MessageParams[1] = (status == H2BR1_OK) ? BOS_OK : BOS_ERROR;  /* Operation status */
-                MessageParams[2] = 1;                                          /* Number of elements (hrValue) */
-                MessageParams[3] = (uint8_t)(CODE_H2BR1_HR_SAMPLE >> 0);      /* Command code LSB */
-                MessageParams[4] = (uint8_t)(CODE_H2BR1_HR_SAMPLE >> 8);      /* Command code MSB */
-                MessageParams[5] = hrValue;                                   /* Heart rate value */
-                SendMessageToModule(dstModule, CODE_READ_RESPONSE, sizeof(uint8_t) + 5);
-            }
-            break;
-
-        case SPO2:
-            /* Sample oxygen saturation data */
-            status = SPO2_Sample(&spo2Value);
-
-            /* If data is to be sent locally */
-            if (dstModule == myID) {
-                writePxITMutex(dstPort, (char*)&spo2Value, sizeof(uint8_t), 10);
-            } else {
-                /* Send data to another module */
-                MessageParams[0] = FMT_UINT8;                                   /* Data format: uint8 */
-                MessageParams[1] = (status == H2BR1_OK) ? BOS_OK : BOS_ERROR;  /* Operation status */
-                MessageParams[2] = 1;                                          /* Number of elements (spo2Value) */
-                MessageParams[3] = (uint8_t)(CODE_H2BR1_SPO2_SAMPLE >> 0);    /* Command code LSB */
-                MessageParams[4] = (uint8_t)(CODE_H2BR1_SPO2_SAMPLE >> 8);    /* Command code MSB */
-                MessageParams[5] = spo2Value;                                 /* Oxygen saturation value */
-                SendMessageToModule(dstModule, CODE_READ_RESPONSE, sizeof(uint8_t) + 5);
-            }
-            break;
-
-        default:
-            status = H2BR1_ERR_WRONGPARAMS;
-            break;
-    }
-
-    return status;
-}
-
-/***************************************************************************/
-/* Streams data to the specified port and module with a given number of samples.
- * targetModule: The target module to which data will be streamed.
- * portNumber: The port number on the module.
- * portFunction: Type of data that will be streamed (ACC, GYRO, MAG, or TEMP).
- * numOfSamples: The number of samples to stream.
- * streamTimeout: The interval (in milliseconds) between successive data transmissions.
- */
-Module_Status StreamToPort(uint8_t dstModule, uint8_t dstPort, All_Data dataFunction, uint32_t numOfSamples, uint32_t streamTimeout) {
-	Module_Status Status = H2BR1_OK;
-	uint32_t SamplePeriod = 0u;
-
-	/* Check timer handle and timeout validity */
-	if ((NULL == xTimerStream) || (0 == streamTimeout) || (0 == numOfSamples))
-		return H2BR1_ERROR;
-
-	/* Set streaming parameters */
-	StreamMode = STREAM_MODE_TO_PORT;
-	PortModule = dstModule;
-	PortNumber = dstPort;
-	PortFunction = dataFunction;
-	PortNumOfSamples = numOfSamples;
-	/* Calculate the period from timeout and number of samples */
-	SamplePeriod = streamTimeout / numOfSamples;
-
-	/* Stop (Reset) the TimerStream if it's already running */
-	if (xTimerIsTimerActive(xTimerStream)) {
-		if (pdFAIL == xTimerStop(xTimerStream, 100))
-			return H2BR1_ERROR;
-	}
-
-	/* Start the stream timer */
-	if (pdFAIL == xTimerStart(xTimerStream, 100))
-		return H2BR1_ERROR;
-
-	/* Update timer timeout - This also restarts the timer */
-	if (pdFAIL == xTimerChangePeriod(xTimerStream, SamplePeriod, 100))
-		return H2BR1_ERROR;
-
-	return Status;
-}
-
-/***************************************************************************/
-/* Streams data to the specified terminal port with a given number of samples.
- * targetPort: The port number on the terminal.
- * dataFunction: Type of data that will be streamed (ACC, GYRO, MAG, or TEMP).
- * numOfSamples: The number of samples to stream.
- * streamTimeout: The interval (in milliseconds) between successive data transmissions.
- */
-Module_Status StreamToTerminal(uint8_t dstPort, All_Data dataFunction, uint32_t numOfSamples, uint32_t streamTimeout) {
-	Module_Status Status = H2BR1_OK;
-	uint32_t SamplePeriod = 0u;
-	uint32_t TerminalTimeout = 0u;               /* Timeout value for terminal streaming */
-
-	/* Check timer handle and timeout validity */
-	if ((NULL == xTimerStream) || (0 == streamTimeout) || (0 == numOfSamples))
-		return H2BR1_ERROR;
-
-	/* Set streaming parameters */
-	StreamMode = STREAM_MODE_TO_TERMINAL;
-	TerminalPort = dstPort;
-	PortFunction = dataFunction;
-	TerminalNumOfSamples = numOfSamples;
-
-	/* Calculate the period from timeout and number of samples */
-	SamplePeriod = streamTimeout / numOfSamples;
-
-	/* Stop (Reset) the TimerStream if it's already running */
-	if (xTimerIsTimerActive(xTimerStream)) {
-		if (pdFAIL == xTimerStop(xTimerStream, 100))
-			return H2BR1_ERROR;
-	}
-
-	/* Start the stream timer */
-	if (pdFAIL == xTimerStart(xTimerStream, 100))
-		return H2BR1_ERROR;
-
-	/* Update timer timeout - This also restarts the timer */
-	if (pdFAIL == xTimerChangePeriod(xTimerStream, SamplePeriod, 100))
-		return H2BR1_ERROR;
-
-	return Status;
-}
-
-/***************************************************************************/
-/*
- * @brief: Streams data to a buffer.
- * @param buffer: Pointer to the buffer where data will be stored.
- * @param function: Function to sample data (e.g., HR, SPO2, FINGER_STATE).
- * @param Numofsamples: Number of samples to take.
- * @param timeout: Timeout period for the operation.
- * @retval: Module status indicating success or error.
- */
-Module_Status StreamToBuffer(float *buffer, All_Data function, uint32_t Numofsamples, uint32_t timeout) {
-    switch (function) {
-        case HR:
-            return StreamToBuf(buffer, Numofsamples, timeout, SampleHRBuf);
-            break;
-        case SPO2:
-            return StreamToBuf(buffer, Numofsamples, timeout, SampleSPO2Buf);
-            break;
-        default:
-            return H2BR1_ERR_WRONGPARAMS;
-    }
-}
-/***************************************************************************/
 /********************************* Commands ********************************/
 /***************************************************************************/
-portBASE_TYPE StreamSPO2Command(int8_t *pcWriteBuffer, size_t xWriteBufferLen, const int8_t *pcCommandString) {
-	const char *const HRCmdName = "hr";
-	const char *const SPO2CmdName = "spo2";
-	const char *pSensName = NULL;
 
-	bool portOrCLI = true; // Port Mode => false and CLI Mode => true
-
-	uint8_t port = 0;
-	uint8_t module = 0;
-	uint32_t timeout = 0;
-	uint32_t Numofsamples = 0;
-
-	portBASE_TYPE sensNameLen = 0;
-
-	/* Make sure we return something */
-	*pcWriteBuffer = '\0';
-
-	if (!StreamCommandParser(pcCommandString, &pSensName, &sensNameLen, &portOrCLI, &Numofsamples, &timeout, &port, &module)) {
-		snprintf((char*) pcWriteBuffer, xWriteBufferLen, "Invalid Arguments\r\n");
-		return pdFALSE;
-	}
-
-	do {
-		if (!strncmp(pSensName, HRCmdName, strlen(HRCmdName))) {
-			if (portOrCLI)
-				StreamToCLI(Numofsamples, timeout, SampleHRToString);
-			else
-				StreamToPort(module, port, HR, Numofsamples, timeout);
-
-		} else if (!strncmp(pSensName, SPO2CmdName, strlen(SPO2CmdName))) {
-			if (portOrCLI)
-				StreamToCLI(Numofsamples, timeout, SampleSPO2ToString);
-			else
-				StreamToPort(module, port, SPO2, Numofsamples, timeout);
-		} else {
-			snprintf((char*) pcWriteBuffer, xWriteBufferLen, "Invalid Arguments\r\n");
-		}
-
-		snprintf((char*) pcWriteBuffer, xWriteBufferLen, "\r\n");
-		return pdFALSE;
-
-	} while (0);
-
-	snprintf((char*) pcWriteBuffer, xWriteBufferLen, "Error reading Sensor\r\n");
-
-	return pdFALSE;
-}
-
-/***************************************************************************/
-static bool StreamCommandParser(const int8_t *pcCommandString, const char **ppSensName, portBASE_TYPE *pSensNameLen,
-		bool *pPortOrCLI, uint32_t *pPeriod, uint32_t *pTimeout, uint8_t *pPort, uint8_t *pModule) {
-	const char *pPeriodMSStr = NULL;
-	const char *pTimeoutMSStr = NULL;
-	const char *pPortStr = NULL;
-	const char *pModStr = NULL;
-
-	portBASE_TYPE periodStrLen = 0;
-	portBASE_TYPE timeoutStrLen = 0;
-	portBASE_TYPE portStrLen = 0;
-	portBASE_TYPE modStrLen = 0;
-
-	*ppSensName = (const char*) FreeRTOS_CLIGetParameter(pcCommandString, 1, pSensNameLen);
-	pPeriodMSStr = (const char*) FreeRTOS_CLIGetParameter(pcCommandString, 2, &periodStrLen);
-	pTimeoutMSStr = (const char*) FreeRTOS_CLIGetParameter(pcCommandString, 3, &timeoutStrLen);
-
-	// At least 3 Parameters are required!
-	if ((*ppSensName == NULL) || (pPeriodMSStr == NULL) || (pTimeoutMSStr == NULL))
-		return false;
-
-	// TODO: Check if Period and Timeout are integers or not!
-	*pPeriod = atoi(pPeriodMSStr);
-	*pTimeout = atoi(pTimeoutMSStr);
-	*pPortOrCLI = true;
-
-	pPortStr = (const char*) FreeRTOS_CLIGetParameter(pcCommandString, 4, &portStrLen);
-	pModStr = (const char*) FreeRTOS_CLIGetParameter(pcCommandString, 5, &modStrLen);
-
-	if ((pModStr == NULL) && (pPortStr == NULL))
-		return true;
-	if ((pModStr == NULL) || (pPortStr == NULL))// If user has provided 4 Arguments.
-		return false;
-
-	*pPort = atoi(pPortStr);
-	*pModule = atoi(pModStr);
-	*pPortOrCLI = false;
-
-	return true;
-}
-
-/***************************************************************************/
-portBASE_TYPE CLI_HR_SampleCommand(int8_t *pcWriteBuffer, size_t xWriteBufferLen, const int8_t *pcCommandString) {
-	Module_Status status = H2BR1_OK;
-	uint8_t heartRate = 0;
-	static const int8_t *pcOKMessage = (int8_t*) "Heart Rate is : %d bpm\n\r";
-	static const int8_t *pcErrorsMessage = (int8_t*) "Error Params!\n\r";
-
-	(void) xWriteBufferLen;
-	configASSERT(pcWriteBuffer);
-
-	status = HR_Sample(&heartRate);
-
-	if (status == H2BR1_OK)
-		sprintf((char*) pcWriteBuffer, (char*) pcOKMessage, heartRate);
-
-	else if (status == H2BR1_ERROR)
-		strcpy((char*) pcWriteBuffer, (char*) pcErrorsMessage);
-
-	return pdFALSE;
-
-}
-
-/***************************************************************************/
-portBASE_TYPE CLI_SPO2_SampleCommand(int8_t *pcWriteBuffer, size_t xWriteBufferLen, const int8_t *pcCommandString) {
-	Module_Status status = H2BR1_OK;
-	uint8_t oxygenationRate = 0;
-	static const int8_t *pcOKMessage = (int8_t*) "Oxygenation Rate(SPO2) is : %d %%\n\r";
-	static const int8_t *pcErrorsMessage = (int8_t*) "Error Params!\n\r";
-
-	(void) xWriteBufferLen;
-	configASSERT(pcWriteBuffer);
-
-	status = SPO2_Sample(&oxygenationRate);
-
-	if (status == H2BR1_OK)
-		sprintf((char*) pcWriteBuffer, (char*) pcOKMessage, oxygenationRate);
-
-	else if (status == H2BR1_ERROR)
-		strcpy((char*) pcWriteBuffer, (char*) pcErrorsMessage);
-
-	return pdFALSE;
-
-}
-
-/***************************************************************************/
-portBASE_TYPE CLI_FingerStateCommand(int8_t *pcWriteBuffer,	size_t xWriteBufferLen, const int8_t *pcCommandString) {
-	Module_Status status = H2BR1_OK;
-	FINGER_STATE fingerState = 0;
-
-	static const int8_t *pcOKMessage = (int8_t*) "FingerState is : %d \n\r";
-	static const int8_t *pcErrorsMessage = (int8_t*) "Error Params!\n\r";
-
-	(void) xWriteBufferLen;
-	configASSERT(pcWriteBuffer);
-
-	status = FingerState(&fingerState);
-
-	if (status == H2BR1_OK)
-		sprintf((char*) pcWriteBuffer, (char*) pcOKMessage, fingerState);
-
-	else if (status == H2BR1_ERROR)
-		strcpy((char*) pcWriteBuffer, (char*) pcErrorsMessage);
-
-	return pdFALSE;
-}
 
 /***************************************************************************/
 /***************** (C) COPYRIGHT HEXABITZ ***** END OF FILE ****************/

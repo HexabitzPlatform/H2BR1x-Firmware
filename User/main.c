@@ -10,45 +10,32 @@
 #include "BOS.h"
 
 /* Private variables *******************************************************/
-float adcValue1 = 0;
-float adcValue2 = 0;
-float adcValue3 = 0;
-float adcValue4 = 0;
-float percentageAdcValue1 = 0;
-float percentageAdcValue2 = 0;
-float percentageAdcValue3 = 0;
-float percentageAdcValue4 = 0;
+
 /* Private Function Prototypes *********************************************/
 
 /* Main Function ***********************************************************/
-int main(void){
+int main(void) {
 
 	/* Initialize Module &  BitzOS */
 	Module_Init();
 
 	/* Don't place your code here */
-	for(;;){
+	for (;;) {
 	}
 }
-
+uint8_t spo ,ss[50] ,k;
+FINGER_STATE d ;
 /***************************************************************************/
 /* User Task */
-void UserTask(void *argument){
-	 ADCSelectPort(P2);
-	 ADCSelectPort(P3);
+void UserTask(void *argument) {
+
 	/* put your code here, to run repeatedly. */
-	while(1){
-			ReadADCChannel(P3, TOP, &adcValue1);
-			ReadADCChannel(P3, BOTTOM, &adcValue2);
-			ReadADCChannel(P2, TOP, &adcValue3);
-			ReadADCChannel(P2, BOTTOM, &adcValue4);
-
-			GetReadPercentage(P3, TOP, &percentageAdcValue1);
-			GetReadPercentage(P3, BOTTOM, &percentageAdcValue2);
-			GetReadPercentage(P2, TOP, &percentageAdcValue3);
-			GetReadPercentage(P2, BOTTOM, &percentageAdcValue4);
-
-}
+	while (1) {
+		SPO2_Sample(&spo);
+		FingerState(&d);
+		SampleReadFlag(ss);
+		HR_Sample(&k);
+	}
 }
 
 /***************************************************************************/
